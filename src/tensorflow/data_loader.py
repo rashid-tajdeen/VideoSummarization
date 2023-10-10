@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import json
 import os
+import csv
 import tensorflow as tf
 import random
 
@@ -22,9 +23,11 @@ def get_uniform_frames(video_path,
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
         ret, frame = cap.read()
         frame = cv2.resize(frame, frame_size)
+
+
         # Normalize pixel values
-        frame = frame / 255.0
-        video_summary.append(frame)
+        # frame = frame / 255.0
+        # video_summary.append(frame)
 
     return video_summary
 
@@ -41,11 +44,12 @@ def load_dataset(labels_path='../dataset/qv_pipe_dataset/qv_pipe_train.json',
                  frame_size=(480, 480),
                  frames_per_video=5,
                  summary_type="uniform"):
-    summary_data_path = summary_directory + summary_type + "_data_tensor.txt"
-    summary_label_path = summary_directory + summary_type + "_label_tensor.txt"
+    # summary_data_path = summary_directory + summary_type + "_data_tensor.txt"
+    # summary_label_path = summary_directory + summary_type + "_label_tensor.txt"
 
-    if not (os.path.isfile(summary_data_path) and
-            os.path.isfile(summary_label_path)):
+    summary_directory = dataset_directory + "../summary_" + summary_type
+
+    if not os.path.isfile(summary_directory):
         prepare_dataset(labels_path,
                         dataset_directory,
                         summary_directory,
@@ -90,6 +94,17 @@ def prepare_dataset(labels_path,
         video_summary = get_frames(dataset_directory + data_key,
                                    frame_size,
                                    frames_per_video)
+
+        # video_summary = np.array(video_summary).flatten()
+        #
+        # with open(summary_directory + summary_type + "_data.csv", 'a', newline='') as file:
+        #     writer = csv.writer(file)
+        #     writer.writerow(np.concatenate([np.array([data_key]), video_summary]))
+        #
+        # # reshaped_array = flattened_array.reshape((5, 480, 480, 3))
+        # #
+        # # print(video_summary == reshaped_array)
+
         # Append the current video and label to the data
         data.append(video_summary)
         label.append([1 if i in data_label[data_key]
@@ -102,7 +117,7 @@ def prepare_dataset(labels_path,
               ", filename :", data_key)
 
         if processed == 5:
-            break   
+            break
 
     # data = tf.convert_to_tensor(data, np.float32)
     # label = tf.convert_to_tensor(label, np.int32)
