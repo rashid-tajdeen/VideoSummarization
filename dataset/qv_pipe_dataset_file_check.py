@@ -2,12 +2,12 @@ import json
 import os.path
 
 file_json = open('qv_pipe_dataset/qv_pipe_train.json')
-data = json.load(file_json)
+all_data = json.load(file_json)
 
 files_verified = []
 files_missing = []
 
-for i in data:
+for i in all_data:
     file_check = os.path.isfile("qv_pipe_dataset/track1_raw_video/" + i)
     # print(i, ":", "File Exists" if file_check else "File Does Not Exist")
     if file_check:
