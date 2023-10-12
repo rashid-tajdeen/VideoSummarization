@@ -1,4 +1,4 @@
-/dataset/qv_pipe_dataset
+/dataset/qv_pipe_dataset/*/*
 /.idea
 __pycache__
 *.pth
