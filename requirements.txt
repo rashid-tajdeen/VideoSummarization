@@ -1,0 +1,5 @@
+## Use `pip install -r requirements.txt --verbose` to install the packages
+
+torchvision
+opencv-python
+neptune
