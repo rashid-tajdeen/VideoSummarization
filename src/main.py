@@ -11,6 +11,10 @@ import argparse
 
 
 def main():
+    device = torch.device(f'cuda:{torch.cuda.current_device()}'
+                          if torch.cuda.is_available()
+                          else 'cpu')
+
     # Parse the command-line arguments
     args = parse_arguments()
 
@@ -21,6 +25,7 @@ def main():
               "learning_rate": args.learning_rate,
               "num_key_frames": args.num_frames,
               "num_epochs": args.epochs,
+              "batch_size": args.batch_size,
               "no_of_classes": 17,
               "resize_x": 240,
               "resize_y": 240,
@@ -35,13 +40,14 @@ def main():
     train_loader, valid_loader = load_dataset(params)
 
     model = TModel2(params["num_key_frames"], params["no_of_classes"])
+    model = model.to(device)
 
     if args.train:
         logger["sys/tags"].add("train")
-        train_step(params, train_loader, model, logger)
+        train_step(params, train_loader, model, device, logger)
     if args.valid:
         logger["sys/tags"].add("valid")
-        valid_step(params, valid_loader, model, logger)
+        valid_step(params, valid_loader, model, device, logger)
 
     logger.stop()
 
@@ -66,6 +72,9 @@ def parse_arguments():
     parser.add_argument('--epochs', '-e', type=int,
                         default=20,
                         help='Number of epochs for training')
+    parser.add_argument('--batch_size', '-b', type=int,
+                        default=16,
+                        help='Batch size for training')
     parser.add_argument('--train', action='store_true',
                         help='Flag to enable training')
     parser.add_argument('--valid', action='store_true',
@@ -107,13 +116,13 @@ def load_dataset(params):
     val_size = len(video_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(video_dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    valid_loader = DataLoader(val_dataset, batch_size=32)
+    train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
+    valid_loader = DataLoader(val_dataset, batch_size=params["batch_size"])
 
     return train_loader, valid_loader
 
 
-def train_step(params, train_loader, model, logger):
+def train_step(params, train_loader, model, device, logger):
     # Define loss function and optimizer
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
@@ -129,9 +138,9 @@ def train_step(params, train_loader, model, logger):
         running_loss = 0.0
 
         for inputs, labels in train_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
-            # print("Input size :", inputs.size())
-            # print("Label size :", labels.size())
             inputs, labels = Variable(inputs), Variable(labels)
             optimizer.zero_grad()
 
@@ -155,7 +164,7 @@ def train_step(params, train_loader, model, logger):
     print("Training complete!")
 
 
-def valid_step(params, valid_loader, model, logger):
+def valid_step(params, valid_loader, model, device, logger):
     # Load trained model for evaluation
     model.load_state_dict(torch.load(params["model_path"]))
 
@@ -165,6 +174,8 @@ def valid_step(params, valid_loader, model, logger):
     total = 0
     with torch.no_grad():
         for inputs, labels in valid_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = model(inputs)
             print(outputs)
             _, predicted = torch.max(outputs.data, 1)
