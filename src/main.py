@@ -8,6 +8,7 @@ from model import TModel2
 from torchvision import transforms
 import neptune
 import argparse
+import progressbar
 
 
 def main():
@@ -134,12 +135,21 @@ def train_step(params, train_loader, model, device, logger):
         print("==========================================")
 
         print("Training...")
+
+        # Add progress bar
+        bar = progressbar.ProgressBar(maxval=len(train_loader),
+                                      widgets=[progressbar.Bar('=', '[', ']'), ' ',
+                                               progressbar.Percentage()])
+        bar.start()
+
         model.train()
         running_loss = 0.0
 
+        batch_done = 0
         for inputs, labels in train_loader:
             inputs = inputs.to(device)
             labels = labels.to(device)
+            curr_batch_len = len(inputs)
 
             inputs, labels = Variable(inputs), Variable(labels)
             optimizer.zero_grad()
@@ -156,9 +166,16 @@ def train_step(params, train_loader, model, device, logger):
 
             running_loss += loss.item()
 
+            # Update progress
+            batch_done += 1
+            bar.update((batch_done * params["batch_size"]) + curr_batch_len)
+
         epoch_loss = running_loss / len(train_loader)
         print(f"Epoch Loss: {epoch_loss:.4f}")
         logger["train_loss"].append(epoch_loss)
+
+        # Close progress bar
+        bar.finish()
 
     torch.save(model.state_dict(), params["model_path"])
     print("Training complete!")
