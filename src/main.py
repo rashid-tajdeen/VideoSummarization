@@ -141,7 +141,7 @@ def train_step(params, train_loader, model, device, logger):
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
     trigger_times = 0
-    patience = 5
+    patience = 3
 
     # Training loop
     for epoch in range(params["num_epochs"]):
