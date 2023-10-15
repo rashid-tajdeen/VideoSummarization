@@ -35,7 +35,8 @@ def main():
                             args.frame_selection + '_' +
                             str(args.num_frames) + 'frames_' +
                             str(args.epochs) + 'epochs' +
-                            '.pth'
+                            '.pth',
+              "early_stopping": args.early_stopping
               }
     logger["parameters"] = params
 
@@ -87,6 +88,8 @@ def parse_arguments():
                         help='Flag to enable training')
     parser.add_argument('--valid', action='store_true',
                         help='Flag to enable validation')
+    parser.add_argument('--early_stopping', action='store_true',
+                        help='Flag to enable early stopping')
 
     return parser.parse_args()
 
@@ -134,6 +137,11 @@ def train_step(params, train_loader, model, device, logger):
     # Define loss function and optimizer
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
+
+    # Early stoping requirements
+    prev_loss = 1  # Initially giving the maximum possible value
+    trigger_times = 0
+    patience = 5
 
     # Training loop
     for epoch in range(params["num_epochs"]):
@@ -184,7 +192,24 @@ def train_step(params, train_loader, model, device, logger):
         # Close progress bar
         bar.finish()
 
-    torch.save(model.state_dict(), params["model_path"])
+        if params["early_stopping"]:
+            current_loss = epoch_loss
+            if current_loss > prev_loss:
+                trigger_times += 1
+                print('Loss increasing... Trigger Times :', trigger_times)
+                if trigger_times >= patience:
+                    print(f"Loss has been increasing for last {trigger_times} epochs")
+                    print('Early stopping!!!')
+                    break
+            else:
+                trigger_times = 0
+                torch.save(model.state_dict(), params["model_path"])
+                print("Model saved to ", params["model_path"])
+            prev_loss = current_loss
+        else:
+            torch.save(model.state_dict(), params["model_path"])
+            print("Model saved to ", params["model_path"])
+
     print("Training complete!")
 
 
