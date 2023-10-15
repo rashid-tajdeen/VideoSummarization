@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
-from model import TModel2
+from model import TModel2, Custom3DModel
 from torchvision import transforms
 import neptune
 import argparse
@@ -30,6 +30,7 @@ def main():
               "no_of_classes": 17,
               "resize_x": 240,
               "resize_y": 240,
+              "channels": 3,
               "model_path": '../models/' +
                             args.frame_selection + '_' +
                             str(args.num_frames) + 'frames_' +
@@ -40,7 +41,13 @@ def main():
 
     train_loader, valid_loader = load_dataset(params)
 
-    model = TModel2(params["num_key_frames"], params["no_of_classes"])
+    # model = TModel2(params["num_key_frames"], params["no_of_classes"])
+    expected_input_shape = (params["batch_size"],
+                            params["num_key_frames"],
+                            params["channels"],
+                            params["resize_x"],
+                            params["resize_x"])
+    model = Custom3DModel(expected_input_shape, params["no_of_classes"])
     model = model.to(device)
 
     if args.train:
