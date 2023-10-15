@@ -102,9 +102,55 @@ class TModel2(nn.Module):
         return torch.sigmoid(out)
 
 
+class Custom3DModel(nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(Custom3DModel, self).__init__()
+
+        # Define a 3D convolutional layer with 5 input channels
+        self.conv1 = nn.Conv3d(input_shape[1], 64, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.pool = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+
+        # Add more convolutional layers and adjust architecture as needed
+        self.conv2 = nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv3d(128, 256, kernel_size=3, stride=1, padding=1)
+
+        # Expected shape before flattening: (num_of_videos, 256, 3, 30, 30)
+        self.flatten = nn.Flatten()
+        # Expected shape after flattening: (num_of_videos, 691200)
+
+        nodes_after_flattening = 256 * input_shape[2] * input_shape[3]/(2*2*2) * input_shape[4]/(2*2*2)  # 3 times pool
+        self.fc1 = nn.Linear(int(nodes_after_flattening), 512)
+        self.fc2 = nn.Linear(512, num_classes)
+
+        # Use Sigmoid activation for multi-label classification
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.pool(x)
+
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.pool(x)
+
+        x = self.conv3(x)
+        x = self.relu(x)
+        x = self.pool(x)
+
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.sigmoid(x)
+
+        return x
+
+
 def main():
-    model1 = TModel2()
-    print(model1)
+    model = Custom3DModel((100, 5, 3, 240, 240), 17)
+    print(model)
 
 
 if __name__ == '__main__':
