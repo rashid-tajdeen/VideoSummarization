@@ -132,7 +132,7 @@ def load_dataset(params):
 
 def train_step(params, train_loader, model, device, logger):
     # Define loss function and optimizer
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
 
     # Training loop
