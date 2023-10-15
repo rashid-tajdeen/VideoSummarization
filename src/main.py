@@ -137,7 +137,7 @@ def train_step(params, train_loader, model, device, logger):
         print("Training...")
 
         # Add progress bar
-        bar = progressbar.ProgressBar(maxval=len(train_loader),
+        bar = progressbar.ProgressBar(maxval=len(train_loader.dataset),
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ',
                                                progressbar.Percentage()])
         bar.start()
@@ -167,8 +167,8 @@ def train_step(params, train_loader, model, device, logger):
             running_loss += loss.item()
 
             # Update progress
-            batch_done += 1
             bar.update((batch_done * params["batch_size"]) + curr_batch_len)
+            batch_done += 1
 
         epoch_loss = running_loss / len(train_loader)
         print(f"Epoch Loss: {epoch_loss:.4f}")
