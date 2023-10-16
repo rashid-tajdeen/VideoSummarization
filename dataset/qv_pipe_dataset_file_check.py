@@ -26,3 +26,17 @@ else:
 print("--------------------------------")
 
 file_json.close()
+
+with open('qv_pipe_dataset/train_keys.json') as f:
+    data = json.load(f)
+    train_keys_count = 0
+    for i in data:
+        train_keys_count += 1
+    print("train_keys_count :", train_keys_count)
+
+with open('qv_pipe_dataset/val_keys.json') as f:
+    data = json.load(f)
+    val_keys_count = 0
+    for i in data:
+        val_keys_count += 1
+    print("val_keys_count :", val_keys_count)
