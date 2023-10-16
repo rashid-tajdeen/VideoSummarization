@@ -12,10 +12,10 @@ import progressbar
 
 
 def main():
-    # # Cuda specific code
-    # device = torch.device(f'cuda:{torch.cuda.current_device()}'
-    #                       if torch.cuda.is_available()
-    #                       else 'cpu')
+    # Cuda specific code
+    device = torch.device(f'cuda:{torch.cuda.current_device()}'
+                          if torch.cuda.is_available()
+                          else 'cpu')
 
     # Parse the command-line arguments
     args = parse_arguments()
