@@ -11,6 +11,7 @@ class QVPipeDataset(torch.utils.data.Dataset):
                  dataset_root="../dataset/qv_pipe_dataset/",
                  no_of_classes=17,
                  num_key_frames=5,
+                 keys_path="../dataset/qv_pipe_dataset/train_keys.json",
                  transform=None,
                  frame_selection='uniform'):
 
@@ -18,19 +19,21 @@ class QVPipeDataset(torch.utils.data.Dataset):
         self.transform = transform
 
         video_directory = dataset_root + "track1_raw_video/"
+
+        # Get the keys
+        with open(keys_path) as key_file:
+            keys = json.load(key_file)
+
+        # Get annotations
         annotation_path = dataset_root + "qv_pipe_train.json"
+        with open(annotation_path) as annotation_file:
+            annotations = json.load(annotation_file)
 
-        file_json = open(annotation_path)
-        annotations = json.load(file_json)
-
-        video_files = list(annotations.keys())
-        random.seed(10)
-        random.shuffle(video_files)
-
+        # Prepare data
         self.video_paths = []
         self.labels = []
         # _video_count = 0
-        for video_name in video_files:
+        for video_name in keys:
             self.video_paths.append(video_directory + video_name)
             self.labels.append([1 if i in annotations[video_name]
                                 else 0
@@ -77,12 +80,19 @@ def main():
         # transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.75, 1.25)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    video_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 17, 5, transform, 'train', 'uniform')
 
-    all_ids = np.array(list(range(len(video_dataset))))
+    # Load your custom video dataset using DataLoader
+    train_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/",
+                                  17,
+                                  5,
+                                  "../dataset/qv_pipe_dataset/train_keys.json",
+                                  transform=transform,
+                                  frame_selection='uniform')
+
+    all_ids = np.array(list(range(len(train_dataset))))
     ids = all_ids[np.random.choice(len(all_ids), size=3, replace=False)]
     for idd in ids:
-        video, label = video_dataset[idd]
+        video, label = train_dataset[idd]
         video = video.permute(0, 2, 3, 1).reshape(5*240, 240, 3).numpy()
         plt.imshow(video)
         plt.show()

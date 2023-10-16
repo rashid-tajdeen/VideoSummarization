@@ -37,6 +37,8 @@ def main():
                             str(args.num_frames) + 'frames_' +
                             str(args.epochs) + 'epochs' +
                             '.pth',
+              "train": args.train,
+              "valid": args.valid,
               "early_stopping": args.early_stopping
               }
     logger["parameters"] = params
@@ -118,18 +120,33 @@ def load_dataset(params):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # Load your custom video dataset using DataLoader
-    video_dataset = QVPipeDataset(params["dataset_root"],
-                                  params["no_of_classes"],
-                                  params["num_key_frames"],
-                                  transform=transform,
-                                  frame_selection=params["frame_selection"])
-    train_size = int(0.8 * len(video_dataset))
-    val_size = len(video_dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(video_dataset, [train_size, val_size])
+    # Load train dataset
+    if params["train"]:
+        train_keys_path = params["dataset_root"] + "train_keys.json"
+        # Load your custom video dataset using DataLoader
+        train_dataset = QVPipeDataset(params["dataset_root"],
+                                      params["no_of_classes"],
+                                      params["num_key_frames"],
+                                      train_keys_path,
+                                      transform=transform,
+                                      frame_selection=params["frame_selection"])
+        train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
+    else:
+        train_loader = None
 
-    train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
-    valid_loader = DataLoader(val_dataset, batch_size=params["batch_size"])
+    # Load valid dataset
+    if params["valid"]:
+        valid_keys_path = params["dataset_root"] + "val_keys.json"
+        # Load your custom video dataset using DataLoader
+        valid_dataset = QVPipeDataset(params["dataset_root"],
+                                      params["no_of_classes"],
+                                      params["num_key_frames"],
+                                      valid_keys_path,
+                                      transform=transform,
+                                      frame_selection=params["frame_selection"])
+        valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"])
+    else:
+        valid_loader = None
 
     return train_loader, valid_loader
 
