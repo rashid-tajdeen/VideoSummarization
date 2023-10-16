@@ -12,9 +12,10 @@ import progressbar
 
 
 def main():
-    device = torch.device(f'cuda:{torch.cuda.current_device()}'
-                          if torch.cuda.is_available()
-                          else 'cpu')
+    # # Cuda specific code
+    # device = torch.device(f'cuda:{torch.cuda.current_device()}'
+    #                       if torch.cuda.is_available()
+    #                       else 'cpu')
 
     # Parse the command-line arguments
     args = parse_arguments()
@@ -49,7 +50,7 @@ def main():
                             params["resize_x"],
                             params["resize_x"])
     model = Custom3DModel(expected_input_shape, params["no_of_classes"])
-    model = model.to(device)
+    # model = model.to(device)
 
     if args.train:
         logger["sys/tags"].add("train")
@@ -162,8 +163,8 @@ def train_step(params, train_loader, model, device, logger):
 
         batch_done = 0
         for inputs, labels in train_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+            # inputs = inputs.to(device)
+            # labels = labels.to(device)
             curr_batch_len = len(inputs)
 
             inputs, labels = Variable(inputs), Variable(labels)
@@ -223,8 +224,8 @@ def valid_step(params, valid_loader, model, device, logger):
     total = 0
     with torch.no_grad():
         for inputs, labels in valid_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+            # inputs = inputs.to(device)
+            # labels = labels.to(device)
             outputs = model(inputs)
             print(outputs)
             _, predicted = torch.max(outputs.data, 1)
