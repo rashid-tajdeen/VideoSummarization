@@ -1,4 +1,14 @@
+# Dataset videos
 /dataset/qv_pipe_dataset/*/*
+
+# IDE files
 /.idea
+
+# Python cache
 __pycache__
+
+# Huge model files
 *.pth
+
+# Neptune cache
+.neptune
