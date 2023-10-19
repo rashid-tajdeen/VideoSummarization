@@ -146,10 +146,10 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    uniform_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 17, 5, transform, 'train', 'uniform')
-    random_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 17, 5, transform, 'train', 'random')
-    less_motion_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 17, 5, transform, 'train', 'less_motion')
-    less_blur_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 17, 5, transform, 'train', 'less_blur')
+    uniform_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 1, 5, "../dataset/qv_pipe_dataset/train_keys.json", transform, 'uniform')
+    random_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 1, 5, "../dataset/qv_pipe_dataset/train_keys.json", transform, 'random')
+    less_motion_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 1, 5, "../dataset/qv_pipe_dataset/train_keys.json", transform, 'less_motion')
+    less_blur_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/", 1, 5, "../dataset/qv_pipe_dataset/train_keys.json", transform, 'less_blur')
 
     for idd in [0, 10]:
         uniform_video, _ = uniform_dataset[idd]

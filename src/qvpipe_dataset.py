@@ -9,7 +9,7 @@ import frame_extraction
 class QVPipeDataset(torch.utils.data.Dataset):
     def __init__(self,
                  dataset_root="../dataset/qv_pipe_dataset/",
-                 no_of_classes=17,
+                 num_classes=1,
                  num_key_frames=5,
                  keys_path="../dataset/qv_pipe_dataset/train_keys.json",
                  transform=None,
@@ -37,7 +37,7 @@ class QVPipeDataset(torch.utils.data.Dataset):
             self.video_paths.append(video_directory + video_name)
             self.labels.append([1 if i in annotations[video_name]
                                 else 0
-                                for i in range(no_of_classes)])
+                                for i in range(num_classes)])
             # _video_count = _video_count + 1
             # if _video_count == 10:
             #     break
@@ -83,7 +83,7 @@ def main():
 
     # Load your custom video dataset using DataLoader
     train_dataset = QVPipeDataset("../dataset/qv_pipe_dataset/",
-                                  17,
+                                  1,
                                   5,
                                   "../dataset/qv_pipe_dataset/train_keys.json",
                                   transform=transform,

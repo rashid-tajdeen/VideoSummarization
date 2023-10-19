@@ -81,7 +81,7 @@ class VideoClassificationModel(nn.Module):
 
 
 class TModel2(nn.Module):
-    def __init__(self, num_frames=5, num_classes=17):
+    def __init__(self, num_frames=5, num_classes=1):
         super().__init__()
         output_dim = 512
         model = models.resnet18(pretrained=True)
@@ -149,7 +149,7 @@ class Custom3DModel(nn.Module):
 
 
 def main():
-    model = Custom3DModel((100, 5, 3, 240, 240), 17)
+    model = Custom3DModel((100, 5, 3, 240, 240), 1)
     print(model)
 
 

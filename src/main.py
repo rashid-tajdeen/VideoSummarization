@@ -28,13 +28,14 @@ def main():
               "num_key_frames": args.num_frames,
               "num_epochs": args.epochs,
               "batch_size": args.batch_size,
-              "no_of_classes": 17,
+              "num_classes": args.classes,
               "resize_x": 240,
               "resize_y": 240,
               "channels": 3,
               "model_path": '../models/' +
                             args.frame_selection + '_' +
                             str(args.num_frames) + 'frames_' +
+                            str(args.classes) + 'classes_' +
                             str(args.epochs) + 'epochs' +
                             '.pth',
               "train": args.train,
@@ -45,13 +46,13 @@ def main():
 
     train_loader, valid_loader = load_dataset(params)
 
-    # model = TModel2(params["num_key_frames"], params["no_of_classes"])
+    # model = TModel2(params["num_key_frames"], params["num_classes"])
     expected_input_shape = (params["batch_size"],
                             params["num_key_frames"],
                             params["channels"],
                             params["resize_x"],
                             params["resize_x"])
-    model = Custom3DModel(expected_input_shape, params["no_of_classes"])
+    model = Custom3DModel(expected_input_shape, params["num_classes"])
     # model = model.to(device)
 
     if args.train:
@@ -84,6 +85,9 @@ def parse_arguments():
     parser.add_argument('--epochs', '-e', type=int,
                         default=20,
                         help='Number of epochs for training')
+    parser.add_argument('--classes', '-c', type=int,
+                        default=1, choices=range(1, 18),
+                        help='Number of classes to train on (value must range from 1 to 17)')
     parser.add_argument('--batch_size', '-b', type=int,
                         default=16,
                         help='Batch size for training')
@@ -125,7 +129,7 @@ def load_dataset(params):
         train_keys_path = params["dataset_root"] + "train_keys.json"
         # Load your custom video dataset using DataLoader
         train_dataset = QVPipeDataset(params["dataset_root"],
-                                      params["no_of_classes"],
+                                      params["num_classes"],
                                       params["num_key_frames"],
                                       train_keys_path,
                                       transform=transform,
@@ -139,7 +143,7 @@ def load_dataset(params):
         valid_keys_path = params["dataset_root"] + "val_keys.json"
         # Load your custom video dataset using DataLoader
         valid_dataset = QVPipeDataset(params["dataset_root"],
-                                      params["no_of_classes"],
+                                      params["num_classes"],
                                       params["num_key_frames"],
                                       valid_keys_path,
                                       transform=transform,
