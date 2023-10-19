@@ -235,26 +235,70 @@ def valid_step(params, valid_loader, model, device, logger):
     # Load trained model for evaluation
     model.load_state_dict(torch.load(params["model_path"]))
 
-    # Validation loop
+    # Change model to evaluation mode
     model.eval()
-    correct = 0
-    total = 0
+
+    # Validation loop
+    correct_predictions = 0
+    total_samples = 0
+    total_loss = 0.0
+    criterion = nn.BCELoss()
     with torch.no_grad():
+        # Add progress bar
+        bar = progressbar.ProgressBar(maxval=len(valid_loader.dataset),
+                                      widgets=[progressbar.Bar('=', 'Validating...[', ']'), ' ',
+                                               progressbar.Percentage()])
+        bar.start()
+        batch_done = 0
+
         for inputs, labels in valid_loader:
             # inputs = inputs.to(device)
             # labels = labels.to(device)
+
+            print(len(inputs[0]))
+
+            # Predict labels
             outputs = model(inputs)
-            print(outputs)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
 
-    val_accuracy = (correct / total) * 100
+            print("outputs :", outputs)
+            print("predicted :", (outputs >= 0.5).float())
+            print("labels :", labels)
 
-    print(f'Validation Accuracy: {val_accuracy}%')
-    logger["val_total"] = total
-    logger["val_correct"] = correct
-    logger["val_accuracy"] = val_accuracy
+            loss = criterion(outputs, labels)
+            print("Loss :", loss)
+            total_loss += loss.item()
+
+            predicted = (outputs >= 0.5).float()
+            correct_predictions += (predicted == labels).sum().item()
+            total_samples += labels.size(0)
+            print("correct_predictions :", correct_predictions)
+            print("total_samples :", total_samples)
+
+            # Update progress
+            curr_batch_len = len(inputs)
+            bar.update((batch_done * params["batch_size"]) + curr_batch_len)
+            batch_done += 1
+
+            # _, predicted = torch.max(outputs.data, 1)
+            # total += labels.size(0)
+            # correct += (predicted == labels).sum().item()
+
+        # Close progress bar
+        bar.finish()
+
+    average_loss = total_loss / len(valid_loader)
+    accuracy = (correct_predictions / total_samples) * 100
+
+    print(f"Validation Loss: {average_loss:.4f}")
+    print(f"Validation Accuracy: {accuracy:.2f}%")
+
+
+    # val_accuracy = (correct / total) * 100
+    #
+    # print(f'Validation Accuracy: {val_accuracy}%')
+    # logger["val_total"] = total
+    # logger["val_correct"] = correct
+    # logger["val_accuracy"] = val_accuracy
 
 
 if __name__ == '__main__':
