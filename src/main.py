@@ -255,24 +255,15 @@ def valid_step(params, valid_loader, model, device, logger):
             # inputs = inputs.to(device)
             # labels = labels.to(device)
 
-            print(len(inputs[0]))
-
             # Predict labels
             outputs = model(inputs)
 
-            print("outputs :", outputs)
-            print("predicted :", (outputs >= 0.5).float())
-            print("labels :", labels)
-
             loss = criterion(outputs, labels)
-            print("Loss :", loss)
             total_loss += loss.item()
 
             predicted = (outputs >= 0.5).float()
             correct_predictions += (predicted == labels).sum().item()
-            total_samples += labels.size(0)
-            print("correct_predictions :", correct_predictions)
-            print("total_samples :", total_samples)
+            total_samples += labels.size(0) * labels.size(1)
 
             # Update progress
             curr_batch_len = len(inputs)
@@ -291,14 +282,6 @@ def valid_step(params, valid_loader, model, device, logger):
 
     print(f"Validation Loss: {average_loss:.4f}")
     print(f"Validation Accuracy: {accuracy:.2f}%")
-
-
-    # val_accuracy = (correct / total) * 100
-    #
-    # print(f'Validation Accuracy: {val_accuracy}%')
-    # logger["val_total"] = total
-    # logger["val_correct"] = correct
-    # logger["val_accuracy"] = val_accuracy
 
 
 if __name__ == '__main__':
