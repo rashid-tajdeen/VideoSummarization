@@ -243,10 +243,14 @@ def valid_step(params, valid_loader, model, device, logger):
     model.eval()
 
     # Validation loop
-    correct_predictions = 0
-    total_samples = 0
+    # correct_predictions = 0
+    # total_samples = 0
     total_loss = 0.0
     criterion = nn.BCELoss()
+    confusion_matrix = {"true_positives": 0,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_negatives": 0}
     with torch.no_grad():
         # Add progress bar
         bar = progressbar.ProgressBar(maxval=len(valid_loader.dataset),
@@ -261,31 +265,46 @@ def valid_step(params, valid_loader, model, device, logger):
 
             # Predict labels
             outputs = model(inputs)
+            predicted = (outputs >= 0.5).float()
 
-            loss = criterion(outputs, labels)
+            loss = criterion(predicted, labels)
+            logger["batch_loss"].append(loss.item())
             total_loss += loss.item()
 
-            predicted = (outputs >= 0.5).float()
-            correct_predictions += (predicted == labels).sum().item()
-            total_samples += labels.size(0) * labels.size(1)
+            # correct_predictions += (predicted == labels).sum().item()
+            # total_samples += labels.size(0) * labels.size(1)
+            confusion_matrix = update_confusion_matrix(confusion_matrix, predicted, labels)
 
             # Update progress
             curr_batch_len = len(inputs)
             bar.update((batch_done * params["batch_size"]) + curr_batch_len)
             batch_done += 1
 
-            # _, predicted = torch.max(outputs.data, 1)
-            # total += labels.size(0)
-            # correct += (predicted == labels).sum().item()
-
         # Close progress bar
         bar.finish()
 
     average_loss = total_loss / len(valid_loader)
+
+    correct_predictions = confusion_matrix["true_positives"] + confusion_matrix["true_negatives"]
+    total_samples = (confusion_matrix["true_positives"] + confusion_matrix["false_positives"] +
+                     confusion_matrix["false_negatives"] + confusion_matrix["true_negatives"])
     accuracy = (correct_predictions / total_samples) * 100
 
+    print("Validation Complete!\n--------------------")
     print(f"Validation Loss: {average_loss:.4f}")
     print(f"Validation Accuracy: {accuracy:.2f}%")
+    print("Confusion Matrix:", confusion_matrix)
+    logger["average_loss"] = average_loss
+    logger["accuracy"] = accuracy
+    logger["confusion_matrix"] = confusion_matrix
+
+
+def update_confusion_matrix(confusion_matrix, predicted, true_labels):
+    confusion_matrix["true_positives"] += torch.sum((true_labels == 1) & (predicted == 1))
+    confusion_matrix["false_positives"] += torch.sum((true_labels == 0) & (predicted == 1))
+    confusion_matrix["false_negatives"] += torch.sum((true_labels == 1) & (predicted == 0))
+    confusion_matrix["true_negatives"] += torch.sum((true_labels == 0) & (predicted == 0))
+    return confusion_matrix
 
 
 if __name__ == '__main__':
