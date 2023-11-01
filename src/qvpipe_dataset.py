@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import json
 import random
-import frame_extraction
+from frame_extraction import FrameExtraction
 
 
 # Custom video dataset class that loads video frames and their labels.
@@ -13,10 +13,11 @@ class QVPipeDataset(torch.utils.data.Dataset):
                  num_key_frames=5,
                  keys_path="../dataset/qv_pipe_dataset/train_keys.json",
                  transform=None,
-                 frame_selection='uniform'):
+                 frame_selection_method='uniform'):
 
         self.num_key_frames = num_key_frames
         self.transform = transform
+        self.frame_selection_method = frame_selection_method
 
         video_directory = dataset_root + "track1_raw_video/"
 
@@ -43,11 +44,13 @@ class QVPipeDataset(torch.utils.data.Dataset):
             #     break
 
         # Set frame selection method
-        self.load_frames = getattr(frame_extraction, 'load_frames_' + frame_selection)
+        self.frame_extraction = FrameExtraction(frame_selection_method, dataset_root, num_key_frames)
 
     def __getitem__(self, idx):
         video_path = self.video_paths[idx]
-        video_summary = self.load_frames(video_path, self.num_key_frames)
+        video_summary = self.frame_extraction.load_frames(video_path,
+                                                          self.frame_selection_method,
+                                                          self.num_key_frames)
         label = torch.Tensor(self.labels[idx])
         if self.transform is not None:
             video_summary = torch.from_numpy(video_summary)
@@ -87,7 +90,7 @@ def main():
                                   5,
                                   "../dataset/qv_pipe_dataset/train_keys.json",
                                   transform=transform,
-                                  frame_selection='uniform')
+                                  frame_selection_method='uniform')
 
     all_ids = np.array(list(range(len(train_dataset))))
     ids = all_ids[np.random.choice(len(all_ids), size=3, replace=False)]

@@ -133,7 +133,7 @@ def load_dataset(params):
                                       params["num_key_frames"],
                                       train_keys_path,
                                       transform=transform,
-                                      frame_selection=params["frame_selection"])
+                                      frame_selection_method=params["frame_selection"])
         train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
     else:
         train_loader = None
@@ -147,7 +147,7 @@ def load_dataset(params):
                                       params["num_key_frames"],
                                       valid_keys_path,
                                       transform=transform,
-                                      frame_selection=params["frame_selection"])
+                                      frame_selection_method=params["frame_selection"])
         valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"])
     else:
         valid_loader = None
