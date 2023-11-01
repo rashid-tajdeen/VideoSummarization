@@ -106,6 +106,8 @@ class Custom3DModel(nn.Module):
     def __init__(self, input_shape, num_classes):
         super(Custom3DModel, self).__init__()
 
+        # Expected input shape: (num_of_videos, num_frames, channels, height, width) : (num_of_videos, 5, 3, 240, 240)
+
         # Define a 3D convolutional layer with 5 input channels
         self.conv1 = nn.Conv3d(input_shape[1], 64, kernel_size=3, stride=1, padding=1)
         self.relu = nn.ReLU(inplace=True)

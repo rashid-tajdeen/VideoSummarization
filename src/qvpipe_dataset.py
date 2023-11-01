@@ -9,7 +9,7 @@ import frame_extraction
 class QVPipeDataset(torch.utils.data.Dataset):
     def __init__(self,
                  dataset_root="../dataset/qv_pipe_dataset/",
-                 num_classes=1,
+                 num_classes=17,
                  num_key_frames=5,
                  keys_path="../dataset/qv_pipe_dataset/train_keys.json",
                  transform=None,

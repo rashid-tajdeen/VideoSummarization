@@ -86,7 +86,7 @@ def parse_arguments():
                         default=20,
                         help='Number of epochs for training')
     parser.add_argument('--classes', '-c', type=int,
-                        default=1, choices=range(1, 18),
+                        default=17, choices=range(1, 18),
                         help='Number of classes to train on (value must range from 1 to 17)')
     parser.add_argument('--batch_size', '-b', type=int,
                         default=16,
