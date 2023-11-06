@@ -1,6 +1,7 @@
 ## Use `pip install -r requirements.txt --verbose` to install the packages
 
 torchvision
+torchnet
 opencv-python
 neptune
 progressbar

@@ -6,6 +6,7 @@ from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
 from model import TModel2, Custom3DModel
 from torchvision import transforms
+import torchnet
 import neptune
 import argparse
 import progressbar
@@ -257,6 +258,10 @@ def valid_step(params, valid_loader, model, device, logger):
                                       widgets=[progressbar.Bar('=', 'Validating...[', ']'), ' ',
                                                progressbar.Percentage()])
         bar.start()
+
+        meter = torchnet.meter.mAPMeter()  # keep track of mean average precision
+        cls_meter = torchnet.meter.APMeter()  # keep track of class-wise average precision
+
         batch_done = 0
 
         for inputs, labels in valid_loader:
@@ -265,6 +270,9 @@ def valid_step(params, valid_loader, model, device, logger):
 
             # Predict labels
             outputs = model(inputs)
+            meter.add(outputs, labels)
+            cls_meter.add(outputs, labels)
+
             predicted = (outputs >= 0.5).float()
 
             loss = criterion(predicted, labels)
@@ -290,6 +298,9 @@ def valid_step(params, valid_loader, model, device, logger):
                      confusion_matrix["false_negatives"] + confusion_matrix["true_negatives"])
     accuracy = (correct_predictions / total_samples) * 100
 
+    mean_average_precision = meter.value()
+    average_precision = cls_meter.value()
+
     print("Validation Complete!\n--------------------")
     print(f"Validation Loss: {average_loss:.4f}")
     print(f"Validation Accuracy: {accuracy:.2f}%")
@@ -297,6 +308,13 @@ def valid_step(params, valid_loader, model, device, logger):
     logger["average_loss"] = average_loss
     logger["accuracy"] = accuracy
     logger["confusion_matrix"] = confusion_matrix
+
+    print("\nmAP Metrics\n--------------------")
+    print("val_mAP", mean_average_precision)
+    logger["val_mAP"] = mean_average_precision.item()
+    for idx, cls_ap in enumerate(average_precision):
+        print("val_AP_%02d" % idx, cls_ap)
+        logger["val_AP"] = average_precision.item()
 
 
 def update_confusion_matrix(confusion_matrix, predicted, true_labels):
