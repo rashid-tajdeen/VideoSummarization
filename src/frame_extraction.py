@@ -99,6 +99,7 @@ class FrameExtraction:
 
         # Find index of frames with min motion
         selected_frame_idx = np.argsort(motion_magnitude)[0:num_frames]
+        selected_frame_idx = selected_frame_idx.tolist()
 
         return selected_frame_idx
 
@@ -120,11 +121,12 @@ class FrameExtraction:
         selected_frame_idx = np.argsort(laplace_var_magnitude)
         # Choose only the number of frames we need
         selected_frame_idx = selected_frame_idx[0:num_frames]
+        selected_frame_idx = selected_frame_idx.tolist()
 
         return selected_frame_idx
 
     def load_frames(self, video_path, method, num_frames):
-        data_file = "../frame_extraction/" + method + "_" + num_frames + "frames.json"
+        data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
         with open(data_file) as df:
             data = json.load(df)
         video_name = os.path.split(video_path)[1]
