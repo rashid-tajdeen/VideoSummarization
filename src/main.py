@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
 from model import TModel2, Custom3DModel
+import torchvision
 from torchvision import transforms
 import torchnet
 import neptune
@@ -186,7 +187,7 @@ def train_step(params, train_loader, model, device, logger):
         bar.start()
 
         model.train()
-        running_loss = 0.0
+        running_loss = []
 
         batch_done = 0
         for inputs, labels in train_loader:
@@ -201,19 +202,19 @@ def train_step(params, train_loader, model, device, logger):
             outputs = model(inputs)
             # print("Output from model : ", outputs)
             # print("Actual output : ", labels)
-            loss = criterion(outputs, labels)
+            loss = loss_function(outputs, labels)
+            running_loss.append(loss.item())
+
             # print("Back Propagating to update weights...")
             loss.backward()
             # print("Weights updated!")
             optimizer.step()
 
-            running_loss += loss.item()
-
             # Update progress
             bar.update((batch_done * params["batch_size"]) + curr_batch_len)
             batch_done += 1
 
-        epoch_loss = running_loss / len(train_loader)
+        epoch_loss = sum(running_loss) / len(running_loss)
         print(f"Epoch Loss: {epoch_loss:.4f}")
         logger["train_loss"].append(epoch_loss)
 
@@ -249,10 +250,7 @@ def valid_step(params, valid_loader, model, device, logger):
     model.eval()
 
     # Validation loop
-    # correct_predictions = 0
-    # total_samples = 0
-    total_loss = 0.0
-    criterion = nn.BCELoss()
+    total_loss = []
     confusion_matrix = {"true_positives": 0,
                         "false_positives": 0,
                         "false_negatives": 0,
@@ -278,14 +276,11 @@ def valid_step(params, valid_loader, model, device, logger):
             meter.add(outputs, labels)
             cls_meter.add(outputs, labels)
 
-            predicted = (outputs >= 0.5).float()
-
-            loss = criterion(predicted, labels)
+            loss = loss_function(outputs, labels)
             logger["batch_loss"].append(loss.item())
-            total_loss += loss.item()
+            total_loss.append(loss.item())
 
-            # correct_predictions += (predicted == labels).sum().item()
-            # total_samples += labels.size(0) * labels.size(1)
+            predicted = (outputs >= 0.5).float()
             confusion_matrix = update_confusion_matrix(confusion_matrix, predicted, labels)
 
             # Update progress
@@ -296,7 +291,7 @@ def valid_step(params, valid_loader, model, device, logger):
         # Close progress bar
         bar.finish()
 
-    average_loss = total_loss / len(valid_loader)
+    average_loss = sum(total_loss) / len(total_loss)
 
     correct_predictions = confusion_matrix["true_positives"] + confusion_matrix["true_negatives"]
     total_samples = (confusion_matrix["true_positives"] + confusion_matrix["false_positives"] +
@@ -319,7 +314,11 @@ def valid_step(params, valid_loader, model, device, logger):
     logger["val_mAP"] = mean_average_precision.item()
     for idx, cls_ap in enumerate(average_precision):
         print("val_AP_%02d" % idx, cls_ap)
-        logger["val_AP"] = average_precision.item()
+        logger["val_AP"].append(average_precision.item())
+
+
+def loss_function(out, label):
+    return torchvision.ops.sigmoid_focal_loss(out, label, reduction='mean')
 
 
 def update_confusion_matrix(confusion_matrix, predicted, true_labels):

@@ -145,7 +145,7 @@ class Custom3DModel(nn.Module):
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
-        x = self.sigmoid(x)
+        # x = self.sigmoid(x)
 
         return x
 
