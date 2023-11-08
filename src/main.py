@@ -112,16 +112,16 @@ def neptune_logger():
 
 
 def load_dataset(params):
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
         transforms.Resize((params["resize_x"], params["resize_y"])),
-        # transforms.RandomAdjustSharpness(1.5),
-        # transforms.RandomAutocontrast(),
-        # transforms.RandomHorizontalFlip(),
-        # transforms.RandomVerticalFlip(),
-        # transforms.RandomErasing(),
-        # transforms.GaussianBlur(kernel_size=3),
-        # transforms.RandomRotation(30),
-        # transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.75, 1.25)),
+        transforms.RandomAdjustSharpness(1.5),
+        transforms.RandomAutocontrast(),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomErasing(),
+        transforms.GaussianBlur(kernel_size=3),
+        transforms.RandomRotation(30),
+        transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.75, 1.25)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
@@ -133,11 +133,16 @@ def load_dataset(params):
                                       params["num_classes"],
                                       params["num_key_frames"],
                                       train_keys_path,
-                                      transform=transform,
+                                      transform=train_transform,
                                       frame_selection_method=params["frame_selection"])
         train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
     else:
         train_loader = None
+
+    valid_transform = transforms.Compose([
+        transforms.Resize((params["resize_x"], params["resize_y"])),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
 
     # Load valid dataset
     if params["valid"]:
@@ -147,7 +152,7 @@ def load_dataset(params):
                                       params["num_classes"],
                                       params["num_key_frames"],
                                       valid_keys_path,
-                                      transform=transform,
+                                      transform=valid_transform,
                                       frame_selection_method=params["frame_selection"])
         valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"])
     else:
