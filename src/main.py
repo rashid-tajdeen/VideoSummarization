@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
@@ -162,12 +160,16 @@ def load_dataset(params):
     return train_loader, valid_loader
 
 
-def train_step(params, train_loader, model, device, logger):
+def train_step(params, data_loader, model, device, logger):
+    dataset = data_loader.dataset
+    train_size = int(0.9 * len(dataset))
+    valid_size = len(dataset) - train_size
+
     # Define loss function and optimizer
     # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=params["learning_rate"],
-                                                    steps_per_epoch=len(train_loader), epochs=params["num_epochs"])
+                                                    steps_per_epoch=train_size, epochs=params["num_epochs"])
 
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
@@ -182,12 +184,12 @@ def train_step(params, train_loader, model, device, logger):
 
         print("Training...")
 
-        train_size = int(0.8 * len(train_loader))
-        valid_size = len(train_loader) - train_size
-        train_set, valid_set = random_split(train_loader, [train_size, valid_size])
+        train_set, valid_set = random_split(dataset, [train_size, valid_size])
+        train_loader = DataLoader(train_set, batch_size=params["batch_size"], shuffle=True)
+        valid_loader = DataLoader(valid_set, batch_size=params["batch_size"], shuffle=False)
 
         # Add progress bar
-        bar = progressbar.ProgressBar(maxval=len(train_set.dataset),
+        bar = progressbar.ProgressBar(maxval=len(dataset),
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ',
                                                progressbar.Percentage()])
         bar.start()
@@ -196,7 +198,7 @@ def train_step(params, train_loader, model, device, logger):
         running_loss = []
 
         batch_done = 0
-        for inputs, labels in train_set:
+        for inputs, labels in train_loader:
             # inputs = inputs.to(device)
             # labels = labels.to(device)
             curr_batch_len = len(inputs)
@@ -247,7 +249,7 @@ def train_step(params, train_loader, model, device, logger):
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
-        valid_step_on_epoch(params, valid_set, model, device, logger)
+        valid_step_on_epoch(params, valid_loader, model, device, logger)
 
     print("Training complete!")
 
@@ -288,6 +290,7 @@ def valid_step_on_epoch(params, valid_loader, model, device, logger):
     mean_average_precision = meter.value()
     print(f"Epoch Valid Loss: {mean_average_precision:.4f}")
     logger["epoch/valid_loss_mAP"].append(mean_average_precision.item())
+
 
 def valid_step(params, valid_loader, model, device, logger):
     # Load trained model for evaluation
