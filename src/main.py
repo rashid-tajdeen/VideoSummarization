@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
 from model import TModel2, Custom3DModel
@@ -182,8 +182,12 @@ def train_step(params, train_loader, model, device, logger):
 
         print("Training...")
 
+        train_size = int(0.8 * len(train_loader))
+        valid_size = len(train_loader) - train_size
+        train_set, valid_set = random_split(train_loader, [train_size, valid_size])
+
         # Add progress bar
-        bar = progressbar.ProgressBar(maxval=len(train_loader.dataset),
+        bar = progressbar.ProgressBar(maxval=len(train_set.dataset),
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ',
                                                progressbar.Percentage()])
         bar.start()
@@ -192,7 +196,7 @@ def train_step(params, train_loader, model, device, logger):
         running_loss = []
 
         batch_done = 0
-        for inputs, labels in train_loader:
+        for inputs, labels in train_set:
             # inputs = inputs.to(device)
             # labels = labels.to(device)
             curr_batch_len = len(inputs)
@@ -217,8 +221,8 @@ def train_step(params, train_loader, model, device, logger):
             batch_done += 1
 
         epoch_loss = sum(running_loss) / len(running_loss)
-        print(f"Epoch Loss: {epoch_loss:.4f}")
-        logger["train_loss"].append(epoch_loss)
+        print(f"Epoch Train Loss: {epoch_loss:.4f}")
+        logger["epoch/train_loss"].append(epoch_loss)
 
         # Close progress bar
         bar.finish()
@@ -243,8 +247,47 @@ def train_step(params, train_loader, model, device, logger):
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
+        valid_step_on_epoch(params, valid_set, model, device, logger)
+
     print("Training complete!")
 
+
+def valid_step_on_epoch(params, valid_loader, model, device, logger):
+    model.eval()
+
+    print("Validating...")
+
+    # Validation loop
+    with torch.no_grad():
+        # Add progress bar
+        bar = progressbar.ProgressBar(maxval=len(valid_loader.dataset),
+                                      widgets=[progressbar.Bar('=', 'Validating...[', ']'), ' ',
+                                               progressbar.Percentage()])
+        bar.start()
+
+        meter = torchnet.meter.mAPMeter()  # keep track of mean average precision
+
+        batch_done = 0
+
+        for inputs, labels in valid_loader:
+            # inputs = inputs.to(device)
+            # labels = labels.to(device)
+
+            # Predict labels
+            outputs = model(inputs)
+            meter.add(outputs, labels)
+
+            # Update progress
+            curr_batch_len = len(inputs)
+            bar.update((batch_done * params["batch_size"]) + curr_batch_len)
+            batch_done += 1
+
+        # Close progress bar
+        bar.finish()
+
+    mean_average_precision = meter.value()
+    print(f"Epoch Valid Loss: {mean_average_precision:.4f}")
+    logger["epoch/valid_loss_mAP"].append(mean_average_precision.item())
 
 def valid_step(params, valid_loader, model, device, logger):
     # Load trained model for evaluation
