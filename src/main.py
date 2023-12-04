@@ -48,13 +48,13 @@ def main():
 
     train_loader, valid_loader = load_dataset(params)
 
-    # model = TModel2(params["num_key_frames"], params["num_classes"])
     expected_input_shape = (params["batch_size"],
                             params["num_key_frames"],
                             params["channels"],
                             params["resize_x"],
                             params["resize_x"])
-    model = Custom3DModel(expected_input_shape, params["num_classes"])
+    # model = Custom3DModel(expected_input_shape, params["num_classes"])
+    model = TModel2(params["num_key_frames"], params["num_classes"])
     # model = model.to(device)
 
     if args.train:
@@ -164,13 +164,12 @@ def load_dataset(params):
 
 def train_step(params, train_loader, model, device, logger):
     # Define loss function and optimizer
-    criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
 
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
     trigger_times = 0
-    patience = 3
+    patience = 2
 
     # Training loop
     for epoch in range(params["num_epochs"]):
@@ -314,7 +313,7 @@ def valid_step(params, valid_loader, model, device, logger):
     logger["val_mAP"] = mean_average_precision.item()
     for idx, cls_ap in enumerate(average_precision):
         print("val_AP_%02d" % idx, cls_ap)
-        logger["val_AP"].append(average_precision.item())
+        logger["val_AP"].append(cls_ap.item())
 
 
 def loss_function(out, label):

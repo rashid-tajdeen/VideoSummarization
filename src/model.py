@@ -99,7 +99,7 @@ class TModel2(nn.Module):
         out = out.squeeze(2).squeeze(2)
         out = out.view(B, -1)
         out = self.classifier(out)
-        return torch.sigmoid(out)
+        return out
 
 
 class Custom3DModel(nn.Module):
