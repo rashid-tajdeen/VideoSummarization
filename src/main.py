@@ -164,7 +164,10 @@ def load_dataset(params):
 
 def train_step(params, train_loader, model, device, logger):
     # Define loss function and optimizer
-    optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
+    # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
+    optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=params["learning_rate"],
+                                                    steps_per_epoch=len(train_loader), epochs=params["num_epochs"])
 
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
@@ -219,6 +222,8 @@ def train_step(params, train_loader, model, device, logger):
 
         # Close progress bar
         bar.finish()
+
+        scheduler.step()
 
         if params["early_stopping"]:
             current_loss = epoch_loss
