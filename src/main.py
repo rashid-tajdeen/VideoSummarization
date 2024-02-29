@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
@@ -54,6 +55,11 @@ def main():
     # model = Custom3DModel(expected_input_shape, params["num_classes"])
     model = TModel2(params["num_key_frames"], params["num_classes"])
     # model = model.to(device)
+
+    # Start to train on existing model
+    if os.path.isfile(params["model_path"]):
+        model.load_state_dict(torch.load(params["model_path"]))
+        print(f'Starting from existing model in "{params["model_path"]}"')
 
     if args.train:
         logger["sys/tags"].add("train")
@@ -174,7 +180,7 @@ def train_step(params, data_loader, model, device, logger):
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
     trigger_times = 0
-    patience = 2
+    patience = 3
 
     # Training loop
     for epoch in range(params["num_epochs"]):
