@@ -262,6 +262,7 @@ def train_step(params, data_loader, model, device, logger):
 
 def valid_step_on_epoch(params, valid_loader, model, device, logger):
     model.eval()
+    total_loss = []
 
     print("Validating...")
 
@@ -274,6 +275,7 @@ def valid_step_on_epoch(params, valid_loader, model, device, logger):
         bar.start()
 
         meter = torchnet.meter.mAPMeter()  # keep track of mean average precision
+        cls_meter = torchnet.meter.APMeter()  # keep track of class-wise average precision
 
         batch_done = 0
 
@@ -284,18 +286,32 @@ def valid_step_on_epoch(params, valid_loader, model, device, logger):
             # Predict labels
             outputs = model(inputs)
             meter.add(outputs, labels)
+            cls_meter.add(outputs, labels)
+
+            # Calculate loss
+            loss = loss_function(outputs, labels)
+            total_loss.append(loss.item())
 
             # Update progress
             curr_batch_len = len(inputs)
             bar.update((batch_done * params["batch_size"]) + curr_batch_len)
             batch_done += 1
 
+        epoch_loss = sum(total_loss) / len(total_loss)
+        print(f"Epoch Valid Loss: {epoch_loss:.4f}")
+        logger["epoch/valid_loss"].append(epoch_loss)
+
         # Close progress bar
         bar.finish()
 
     mean_average_precision = meter.value()
-    print(f"Epoch Valid Loss: {mean_average_precision:.4f}")
-    logger["epoch/valid_loss_mAP"].append(mean_average_precision.item())
+    print(f"Epoch Valid mAP: {mean_average_precision:.4f}")
+    logger["epoch/valid_mAP"].append(mean_average_precision.item())
+
+    average_precision = cls_meter.value()
+    for idx, cls_ap in enumerate(average_precision):
+        print("Epoch Valid AP class %02d:" % idx, cls_ap)
+        logger["epoch/val_AP_class_" + str(idx)].append(cls_ap.item())
 
 
 def valid_step(params, valid_loader, model, device, logger):

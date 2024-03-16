@@ -16,13 +16,13 @@ import matplotlib.pyplot as plt
 
 class FrameExtraction:
     def __init__(self, method=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
-
+        needs_prep = ["histogram", "k_means", "less_motion", "less_blur"]
         if method is None:
             # prepare all methods
-            method = ["histogram", "k_means", "uniform", "random", "less_motion", "less_blur"]
-            for meth in method:
-                self.prepare(meth, dataset_root, num_frames)
-        else:
+            methods = needs_prep
+            for method in methods:
+                self.prepare(method, dataset_root, num_frames)
+        elif method in needs_prep:
             self.prepare(method, dataset_root, num_frames)
 
     def prepare(self, method, dataset_root, num_frames):
@@ -41,7 +41,7 @@ class FrameExtraction:
             video_names = json.load(annotation_file).keys()
 
         # Defining method
-        get_frame_index = getattr(self, "frame_index_" + method)
+        prepare_method = getattr(self, "_prepare_" + method)
 
         # Prepare data
         print("Preparing " + method + " frame data...")
@@ -60,22 +60,21 @@ class FrameExtraction:
                     print("Cannot open video at :", video_path)
                     exit()
 
-                # Select frame index
-                selected_frame_idx = get_frame_index(cap, num_frames)
-                data[video_name] = selected_frame_idx
-
-                # Close video
-                cap.release()
-
+                # Prepare data
+                prepared_data = prepare_method(cap, num_frames)
+                data[video_name] = prepared_data
                 # Save the data in a JSON file
                 with open(data_file, 'w') as file:
                     json.dump(data, file)
+
+                # Close video
+                cap.release()
 
             # Progress printing
             count += 1
             print("(" + str(count) + "/" + str(total_count) + ")" + " done")
 
-    def frame_index_uniform(self, cap, num_frames):
+    def _prepare_uniform(self, cap, num_frames):
         selected_frame_idx = []
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         for i in range(num_frames):
@@ -83,12 +82,27 @@ class FrameExtraction:
             selected_frame_idx.append(frame_idx)
         return selected_frame_idx
 
-    def frame_index_random(self, cap, num_frames):
+    def _prepare_random(self, cap, num_frames):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         selected_frame_idx = random.sample(range(total_frames), num_frames)
         return selected_frame_idx
 
-    def frame_index_less_motion(self, cap, num_frames):
+    def _load_random(self, video_path, num_frames):
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        selected_frame_idx = random.sample(range(total_frames), num_frames)
+        selected_frames = self._get_frames(cap, selected_frame_idx)
+
+        cap.release()
+
+        return selected_frames
+
+    def _prepare_less_motion(self, cap, num_frames):
         motion_magnitude = []
         prev_frame = None
 
@@ -116,7 +130,7 @@ class FrameExtraction:
 
         return selected_frame_idx
 
-    def frame_index_less_blur(self, cap, num_frames):
+    def _prepare_less_blur(self, cap, num_frames):
         laplace_var_magnitude = []
         while True:
             ret, frame = cap.read()
@@ -138,7 +152,7 @@ class FrameExtraction:
 
         return selected_frame_idx
 
-    def frame_index_k_means(self, cap, num_frames):
+    def _prepare_k_means(self, cap, num_frames):
 
         # Function to extract ResNet features from a frame
         def extract_resnet_features(frame, model):
@@ -187,7 +201,7 @@ class FrameExtraction:
 
         return selected_frame_idx
 
-    def frame_index_histogram(self, cap, num_frames):
+    def _prepare_histogram(self, cap, num_frames):
 
         def calculate_histogram(curr_frame):
 
@@ -261,18 +275,19 @@ class FrameExtraction:
         # exit(0)
 
     def load_frames(self, video_path, method, num_frames):
-        data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
-        with open(data_file) as df:
-            data = json.load(df)
-        video_name = os.path.split(video_path)[1]
-        selected_frame_idx = data[video_name]
+        # data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
+        # with open(data_file) as df:
+        #     data = json.load(df)
+        # video_name = os.path.split(video_path)[1]
+        # selected_frame_idx = data[video_name]
 
-        # Open the video file
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            print("Cannot open video at :", video_path)
-            exit()
+        # Defining method
+        load_method = getattr(self, "_load_" + method)
+        selected_frames = load_method(video_path, num_frames)
 
+        return selected_frames
+
+    def _get_frames(self, cap, selected_frame_idx):
         selected_frames = []
         for frame_idx in selected_frame_idx:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -280,14 +295,12 @@ class FrameExtraction:
             frame = frame[:, :, ::-1].copy()
             selected_frames.append(frame)
 
-        cap.release()
-
         selected_frames = np.array(selected_frames)
         return selected_frames
 
 
 def main():
-    frame_extraction = FrameExtraction()
+    frame_extraction = FrameExtraction("random")
 
     # # For testing the frame selection
     #
