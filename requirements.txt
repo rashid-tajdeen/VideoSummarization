@@ -9,3 +9,4 @@ progressbar
 # Used for k-means
 scikit-learn
 tensorflow
+matplotlib

@@ -179,12 +179,12 @@ def train_step(params, data_loader, model, device, logger):
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=params["learning_rate"],
     #                                                 steps_per_epoch=train_size, epochs=params["num_epochs"])
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
     trigger_times = 0
-    patience = 2
+    patience = 3
 
     # Training loop
     for epoch in range(params["num_epochs"]):
