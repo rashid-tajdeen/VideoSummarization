@@ -26,7 +26,7 @@ class MultiLabelModel(nn.Module):
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
-        return torch.sigmoid(x)
+        return x
 
 
 class CustomMultiLabelModel(nn.Module):

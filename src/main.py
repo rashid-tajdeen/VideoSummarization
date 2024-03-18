@@ -11,6 +11,9 @@ import neptune
 import argparse
 import progressbar
 
+from torch.nn.functional import binary_cross_entropy_with_logits
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 
 def main():
     # Cuda specific code
@@ -83,7 +86,7 @@ def parse_arguments():
                         default='../dataset/qv_pipe_dataset/',
                         help='Path to the dataset directory')
     parser.add_argument('--learning_rate', '-lr', type=float,
-                        default=0.001,
+                        default=0.01,
                         help='Learning rate for training')
     parser.add_argument('--num_frames', '-n', type=int,
                         default=5,
@@ -174,13 +177,14 @@ def train_step(params, data_loader, model, device, logger):
     # Define loss function and optimizer
     # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=params["learning_rate"],
-                                                    steps_per_epoch=train_size, epochs=params["num_epochs"])
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=params["learning_rate"],
+    #                                                 steps_per_epoch=train_size, epochs=params["num_epochs"])
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=2, verbose=True)
 
     # Early stoping requirements
     prev_loss = 1  # Initially giving the maximum possible value
     trigger_times = 0
-    patience = 3
+    patience = 2
 
     # Training loop
     for epoch in range(params["num_epochs"]):
@@ -209,7 +213,7 @@ def train_step(params, data_loader, model, device, logger):
             # labels = labels.to(device)
             curr_batch_len = len(inputs)
 
-            inputs, labels = Variable(inputs), Variable(labels)
+            # inputs, labels = Variable(inputs), Variable(labels)
             optimizer.zero_grad()
 
             # print("Getting outputs from model...")
@@ -235,8 +239,6 @@ def train_step(params, data_loader, model, device, logger):
         # Close progress bar
         bar.finish()
 
-        scheduler.step()
-
         if params["early_stopping"]:
             current_loss = epoch_loss
             if current_loss > prev_loss:
@@ -255,7 +257,9 @@ def train_step(params, data_loader, model, device, logger):
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
-        valid_step_on_epoch(params, valid_loader, model, device, logger)
+        epoch_valid_loss = valid_step_on_epoch(params, valid_loader, model, device, logger)
+
+        scheduler.step(epoch_valid_loss)
 
     print("Training complete!")
 
@@ -263,6 +267,7 @@ def train_step(params, data_loader, model, device, logger):
 def valid_step_on_epoch(params, valid_loader, model, device, logger):
     model.eval()
     total_loss = []
+    val_loss = 0.0
 
     print("Validating...")
 
@@ -291,15 +296,17 @@ def valid_step_on_epoch(params, valid_loader, model, device, logger):
             # Calculate loss
             loss = loss_function(outputs, labels)
             total_loss.append(loss.item())
+            val_loss += loss.item() * inputs.size(0)
 
             # Update progress
             curr_batch_len = len(inputs)
             bar.update((batch_done * params["batch_size"]) + curr_batch_len)
             batch_done += 1
 
-        epoch_loss = sum(total_loss) / len(total_loss)
-        print(f"Epoch Valid Loss: {epoch_loss:.4f}")
-        logger["epoch/valid_loss"].append(epoch_loss)
+        # epoch_loss = sum(total_loss) / len(total_loss)
+        val_loss /= len(valid_loader.dataset)
+        print(f"Epoch Valid Loss: {val_loss:.4f}")
+        logger["epoch/valid_loss"].append(val_loss)
 
         # Close progress bar
         bar.finish()
@@ -312,6 +319,8 @@ def valid_step_on_epoch(params, valid_loader, model, device, logger):
     for idx, cls_ap in enumerate(average_precision):
         print("Epoch Valid AP class %02d:" % idx, cls_ap)
         logger["epoch/val_AP_class_" + str(idx)].append(cls_ap.item())
+
+    return val_loss
 
 
 def valid_step(params, valid_loader, model, device, logger):
@@ -390,7 +399,8 @@ def valid_step(params, valid_loader, model, device, logger):
 
 
 def loss_function(out, label):
-    return torchvision.ops.sigmoid_focal_loss(out, label, reduction='mean')
+    # return torchvision.ops.sigmoid_focal_loss(out, label, reduction='mean')
+    return binary_cross_entropy_with_logits(out, label.float())
 
 
 def update_confusion_matrix(confusion_matrix, predicted, true_labels):
