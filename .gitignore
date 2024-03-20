@@ -1,5 +1,6 @@
 # Dataset videos
-/dataset/qv_pipe_dataset/*/*
+/dataset/qv_pipe_dataset/track1_raw_video
+/dataset/qv_pipe_dataset/**/*.json
 
 # IDE files
 /.idea
