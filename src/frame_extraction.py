@@ -1,8 +1,12 @@
 import os.path
+import time
+import subprocess
+
 import cv2
 import numpy as np
 import json
 import random
+from pathlib import Path
 import imreg_dft as ird
 
 # Used for k-means
@@ -16,7 +20,7 @@ import matplotlib.pyplot as plt
 
 class FrameExtraction:
     def __init__(self, method=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
-        needs_prep = ["histogram", "k_means", "less_motion", "less_blur"]
+        needs_prep = ["motion", "less_blur", "histogram", "k_means"]
         if method is None:
             # prepare all methods
             methods = needs_prep
@@ -28,12 +32,12 @@ class FrameExtraction:
     def prepare(self, method, dataset_root, num_frames):
         data = {}
         # Check if data is already prepared
-        data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
-        if os.path.isfile(data_file):
-            print("Data for " + method + " frame extraction already exists")
-            # Read the data from the JSON file
-            with open(data_file, 'r') as file:
-                data = json.load(file)
+
+        # if os.path.isfile(data_file):
+        #     print("Data for " + method + " frame extraction already exists")
+        #     # Read the data from the JSON file
+        #     with open(data_file, 'r') as file:
+        #         data = json.load(file)
 
         # Get video names
         annotation_path = dataset_root + "qv_pipe_train.json"
@@ -45,30 +49,29 @@ class FrameExtraction:
 
         # Prepare data
         print("Preparing " + method + " frame data...")
+        data_directory = dataset_root + "track1_raw_data/"
         video_directory = dataset_root + "track1_raw_video/"
         count = 0
         total_count = len(video_names)
         for video_name in video_names:
             print(video_name)
-            # Run only if data doesn't exist
-            if video_name not in data.keys():
-                video_path = video_directory + video_name
+            json_data_file = data_directory + method + "/" + Path(video_name).stem + ".json"
+
+            # json_data = {}
+            if not os.path.isfile(json_data_file):
+                # with open(json_data_file, 'r') as file:
+                #     json_data = json.load(file)
+
+                # if method in json_data.keys():
+                #     print("Exists")
+                #     continue
 
                 # Open video
-                cap = cv2.VideoCapture(video_path)
-                if not cap.isOpened():
-                    print("Cannot open video at :", video_path)
-                    exit()
+                video_path = video_directory + video_name
 
                 # Prepare data
-                prepared_data = prepare_method(cap, num_frames)
-                data[video_name] = prepared_data
-                # Save the data in a JSON file
-                with open(data_file, 'w') as file:
-                    json.dump(data, file)
-
-                # Close video
-                cap.release()
+                prepare_method(video_path, json_data_file)
+                # json_data[method] = prepared_data
 
             # Progress printing
             count += 1
@@ -102,8 +105,10 @@ class FrameExtraction:
 
         return selected_frames
 
-    def _prepare_less_motion(self, cap, num_frames):
-        motion_magnitude = []
+    def _prepare_less_motion(self, video_path, json_file):
+        cap = self._open_video(video_path)
+
+        data = {"motion_magnitude": []}
         prev_frame = None
 
         while True:
@@ -119,19 +124,29 @@ class FrameExtraction:
             else:
                 # High value to ignore
                 motion = 1000
-            motion_magnitude.append(motion)
+            data["motion_magnitude"].append(motion)
 
             # Update the previous frame
             prev_frame = current_frame.copy()
 
-        # Find index of frames with min motion
-        selected_frame_idx = np.argsort(motion_magnitude)[0:num_frames]
-        selected_frame_idx = selected_frame_idx.tolist()
+        # # Find index of frames with min motion
+        # selected_frame_idx = np.argsort(motion_magnitude)[0:num_frames]
+        # selected_frame_idx = selected_frame_idx.tolist()
 
-        return selected_frame_idx
+        # Close video
+        cap.release()
 
-    def _prepare_less_blur(self, cap, num_frames):
-        laplace_var_magnitude = []
+        self._verify_data_count(data, cap)
+        self._save_data(json_file, data)
+
+    def _prepare_motion(self, video_path, json_file):
+        subprocess.run(["./video_main", video_path, json_file])
+
+    def _prepare_less_blur(self, video_path, json_file):
+        cap = self._open_video(video_path)
+
+        data = {"laplacian_variance": [],
+                "notes": "More laplacian variance means less blurry"}
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -142,31 +157,36 @@ class FrameExtraction:
             # if variance is less, image is more blurry
             laplacian_variance = cv2.Laplacian(gray, cv2.CV_64F).var()
 
-            laplace_var_magnitude.append(laplacian_variance)
+            data["laplacian_variance"].append(laplacian_variance)
 
-        # Arrange frame index in increasing order of blurriness
-        selected_frame_idx = np.argsort(laplace_var_magnitude)
-        # Choose only the number of frames we need
-        selected_frame_idx = selected_frame_idx[0:num_frames]
-        selected_frame_idx = selected_frame_idx.tolist()
+        # # Arrange frame index in increasing order of blurriness
+        # selected_frame_idx = np.argsort(laplace_var_magnitude)
+        # # Choose only the number of frames we need
+        # selected_frame_idx = selected_frame_idx[0:num_frames]
+        # selected_frame_idx = selected_frame_idx.tolist()
 
-        return selected_frame_idx
+        # Close video
+        cap.release()
 
-    def _prepare_k_means(self, cap, num_frames):
+        self._verify_data_count(data, cap)
+        self._save_data(json_file, data)
+
+    def _prepare_k_means(self, video_path, json_file):
+        cap = self._open_video(video_path)
 
         # Function to extract ResNet features from a frame
-        def extract_resnet_features(frame, model):
-            resized_frame = cv2.resize(frame, (224, 224))
+        def extract_resnet_features(fr, model):
+            resized_frame = cv2.resize(fr, (224, 224))
             preprocessed_frame = preprocess_input(resized_frame)
-            features = model.predict(np.expand_dims(preprocessed_frame, axis=0))
-            return features.flatten()
+            feat = model.predict(np.expand_dims(preprocessed_frame, axis=0))
+            return feat.flatten()
 
         # Load pre-trained ResNet model
         resnet_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
 
-        # Extract ResNet features from each frame
-        features_list = []
+        data = {"features_list": []}
 
+        # Extract ResNet features from each frame
         frame_number = 0
         while True:
             ret, frame = cap.read()
@@ -175,55 +195,62 @@ class FrameExtraction:
             frame_number += 1
             print("Frame number : ", frame_number)
             features = extract_resnet_features(frame, resnet_model)
-            features_list.append(features)
+            data["features_list"].append(np.array(features).tolist())
 
-        # Convert features to numpy array
-        features_array = np.array(features_list)
+            if frame_number == 3:
+                break
 
-        # Perform K-means clustering
-        kmeans = KMeans(n_clusters=num_frames, random_state=42)
-        kmeans.fit(features_array)
-
+        # # Convert features to numpy array
+        # features_array = np.array(features_list)
+        #
+        # # Perform K-means clustering
+        # kmeans = KMeans(n_clusters=num_frames, random_state=42)
+        # kmeans.fit(features_array)
+        #
+        # # # Select keyframes as centroids of clusters
+        # # selected_frame_idx = kmeans.cluster_centers_.argsort()[:, -1]
+        #
         # # Select keyframes as centroids of clusters
-        # selected_frame_idx = kmeans.cluster_centers_.argsort()[:, -1]
+        # selected_frame_idx = []
+        # for cluster_center in kmeans.cluster_centers_:
+        #     distances = np.linalg.norm(features_array - cluster_center, axis=1)
+        #     closest_frame_index = np.argmin(distances)
+        #     selected_frame_idx.append(closest_frame_index)
+        #
+        # selected_frame_idx = np.array(selected_frame_idx)
+        # selected_frame_idx = np.sort(selected_frame_idx)
+        # selected_frame_idx = selected_frame_idx.tolist()
+        # print("selected_frame_idx : ", selected_frame_idx)
 
-        # Select keyframes as centroids of clusters
-        selected_frame_idx = []
-        for cluster_center in kmeans.cluster_centers_:
-            distances = np.linalg.norm(features_array - cluster_center, axis=1)
-            closest_frame_index = np.argmin(distances)
-            selected_frame_idx.append(closest_frame_index)
+        # Close video
+        cap.release()
 
-        selected_frame_idx = np.array(selected_frame_idx)
-        selected_frame_idx = np.sort(selected_frame_idx)
-        selected_frame_idx = selected_frame_idx.tolist()
-        print("selected_frame_idx : ", selected_frame_idx)
+        self._verify_data_count(data, cap)
+        self._save_data(json_file, data)
 
-        return selected_frame_idx
-
-    def _prepare_histogram(self, cap, num_frames):
+    def _prepare_histogram(self, video_path, json_file):
+        cap = self._open_video(video_path)
 
         def calculate_histogram(curr_frame):
-
-            hist_b = cv2.calcHist([curr_frame], [0], None, [256], [0, 256])
-            hist_g = cv2.calcHist([curr_frame], [1], None, [256], [0, 256])
-            hist_r = cv2.calcHist([curr_frame], [2], None, [256], [0, 256])
-
-            return hist_b, hist_g, hist_r
-
-            chans = cv2.split(curr_frame)
-            colors = ("b", "g", "r")
-            plt.figure()
-            plt.title("'Flattened' Color Histogram")
-            plt.xlabel("Bins")
-            plt.ylabel("# of Pixels")
-            # loop over the image channels
-            for (chan, color) in zip(chans, colors):
-                # create a histogram for the current channel and plot it
-                hist = cv2.calcHist([chan], [0], None, [256], [0, 256])
-                plt.plot(hist, color=color)
-                plt.xlim([0, 256])
-            plt.show()
+            # hist_b = cv2.calcHist([curr_frame], [0], None, [256], [0, 256])
+            # hist_g = cv2.calcHist([curr_frame], [1], None, [256], [0, 256])
+            # hist_r = cv2.calcHist([curr_frame], [2], None, [256], [0, 256])
+            #
+            # return hist_b, hist_g, hist_r
+            #
+            # chans = cv2.split(curr_frame)
+            # colors = ("b", "g", "r")
+            # plt.figure()
+            # plt.title("'Flattened' Color Histogram")
+            # plt.xlabel("Bins")
+            # plt.ylabel("# of Pixels")
+            # # loop over the image channels
+            # for (chan, color) in zip(chans, colors):
+            #     # create a histogram for the current channel and plot it
+            #     hist = cv2.calcHist([chan], [0], None, [256], [0, 256])
+            #     plt.plot(hist, color=color)
+            #     plt.xlim([0, 256])
+            # plt.show()
 
             # Convert the frame to grayscale
             gray_frame = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
@@ -232,25 +259,25 @@ class FrameExtraction:
             return hist
 
         def calculate_frame_difference(hist1, hist2):
-            # Compute histogram differences for each channel
-            diff_b = cv2.compareHist(hist1[0], hist2[0], cv2.HISTCMP_CHISQR)
-            diff_g = cv2.compareHist(hist1[1], hist2[1], cv2.HISTCMP_CHISQR)
-            diff_r = cv2.compareHist(hist1[2], hist2[2], cv2.HISTCMP_CHISQR)
+            # # Compute histogram differences for each channel
+            # diff_b = cv2.compareHist(hist1[0], hist2[0], cv2.HISTCMP_CHISQR)
+            # diff_g = cv2.compareHist(hist1[1], hist2[1], cv2.HISTCMP_CHISQR)
+            # diff_r = cv2.compareHist(hist1[2], hist2[2], cv2.HISTCMP_CHISQR)
+            #
+            # # Optionally, combine differences from individual channels
+            # combined_diff = diff_b + diff_g + diff_r
+            #
+            # return combined_diff
 
-            # Optionally, combine differences from individual channels
-            combined_diff = diff_b + diff_g + diff_r
+            # Calculate histogram differences using chi-square distance
+            diff = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CHISQR)
+            return diff
 
-            return combined_diff
+        data = {"histogram": []}
 
-            # # Calculate histogram differences using chi-square distance
-            # diff = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CHISQR)
-            # return diff
-
-        hist_differences = []
-
-        # Read the first frame and calculate its histogram
-        ret, prev_frame = cap.read()
-        prev_hist = calculate_histogram(prev_frame)
+        # # Read the first frame and calculate its histogram
+        # ret, prev_frame = cap.read()
+        # prev_hist = calculate_histogram(prev_frame)
 
         while True:
             ret, frame = cap.read()
@@ -258,21 +285,27 @@ class FrameExtraction:
                 break
 
             # Calculate histogram for the current frame
-            curr_hist = calculate_histogram(frame)
-            # Calculate histogram difference between current and previous frames
-            curr_diff = calculate_frame_difference(prev_hist, curr_hist)
+            curr_hist = calculate_histogram(frame).tolist()
+            data["histogram"].append(curr_hist)
 
-            hist_differences.append(curr_diff)
+            # # Calculate histogram difference between current and previous frames
+            # curr_diff = calculate_frame_difference(prev_hist, curr_hist)
+            #
+            # hist_differences.append(curr_diff)
             # Update previous histogram
-            prev_hist = curr_hist
+            # prev_hist = curr_hist
 
-        plt.plot(hist_differences)
-        plt.show()
+        # plt.plot(hist_differences)
+        # plt.show()
+        #
+        # plt.plot(np.cumsum(hist_differences))
+        # plt.show()
 
-        plt.plot(np.cumsum(hist_differences))
-        plt.show()
+        # Close video
+        cap.release()
 
-        # exit(0)
+        self._verify_data_count(data, cap)
+        self._save_data(json_file, data)
 
     def load_frames(self, video_path, method, num_frames):
         # data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
@@ -298,9 +331,27 @@ class FrameExtraction:
         selected_frames = np.array(selected_frames)
         return selected_frames
 
+    def _verify_data_count(self, data, cap):
+        for key in data.keys():
+            if (len(data[key]) != int(cap.get(cv2.CAP_PROP_FRAME_COUNT))) and (key != "notes"):
+                print("Data length does not match frame count")
+                exit(1)
+
+    def _open_video(self, video_path):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+        return cap
+
+    def _save_data(self, file, data):
+        # Save the data in a JSON file
+        with open(file, 'w') as f:
+            json.dump(data, f)
+
 
 def main():
-    frame_extraction = FrameExtraction("random")
+    frame_extraction = FrameExtraction()
 
     # # For testing the frame selection
     #
