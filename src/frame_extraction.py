@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 class FrameExtraction:
     def __init__(self, method=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
-        needs_prep = ["motion", "less_blur", "histogram", "k_means"]
+        needs_prep = ["histogram", "k_means"]
         if method is None:
             # prepare all methods
             methods = needs_prep
@@ -133,11 +133,11 @@ class FrameExtraction:
         # selected_frame_idx = np.argsort(motion_magnitude)[0:num_frames]
         # selected_frame_idx = selected_frame_idx.tolist()
 
-        # Close video
-        cap.release()
-
         self._verify_data_count(data, cap)
         self._save_data(json_file, data)
+
+        # Close video
+        cap.release()
 
     def _prepare_motion(self, video_path, json_file):
         subprocess.run(["./video_main", video_path, json_file])
@@ -165,11 +165,11 @@ class FrameExtraction:
         # selected_frame_idx = selected_frame_idx[0:num_frames]
         # selected_frame_idx = selected_frame_idx.tolist()
 
-        # Close video
-        cap.release()
-
         self._verify_data_count(data, cap)
         self._save_data(json_file, data)
+
+        # Close video
+        cap.release()
 
     def _prepare_k_means(self, video_path, json_file):
         cap = self._open_video(video_path)
@@ -222,11 +222,11 @@ class FrameExtraction:
         # selected_frame_idx = selected_frame_idx.tolist()
         # print("selected_frame_idx : ", selected_frame_idx)
 
-        # Close video
-        cap.release()
-
         self._verify_data_count(data, cap)
         self._save_data(json_file, data)
+
+        # Close video
+        cap.release()
 
     def _prepare_histogram(self, video_path, json_file):
         cap = self._open_video(video_path)
@@ -301,11 +301,11 @@ class FrameExtraction:
         # plt.plot(np.cumsum(hist_differences))
         # plt.show()
 
-        # Close video
-        cap.release()
-
         self._verify_data_count(data, cap)
         self._save_data(json_file, data)
+
+        # Close video
+        cap.release()
 
     def load_frames(self, video_path, method, num_frames):
         # data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
