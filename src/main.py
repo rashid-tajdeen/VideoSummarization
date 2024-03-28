@@ -49,6 +49,7 @@ def main():
     logger["parameters"] = params
 
     train_loader, valid_loader = load_dataset(params)
+    epoch_valid_loader = get_subset(valid_loader)
 
     expected_input_shape = (params["batch_size"],
                             params["num_key_frames"],
@@ -66,7 +67,7 @@ def main():
 
     if args.train:
         logger["sys/tags"].add("train")
-        train_step(params, train_loader, model, device, logger)
+        train_step(params, train_loader, epoch_valid_loader, model, device, logger)
     if args.valid:
         logger["sys/tags"].add("valid")
         valid_step(params, valid_loader, model, device, logger)
@@ -120,6 +121,7 @@ def neptune_logger():
 
 
 def load_dataset(params):
+    # Load train dataset
     train_transform = transforms.Compose([
         transforms.Resize((params["resize_x"], params["resize_y"])),
         transforms.RandomAdjustSharpness(1.5),
@@ -132,48 +134,45 @@ def load_dataset(params):
         transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.75, 1.25)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
+    train_keys_path = params["dataset_root"] + "train_keys.json"
+    # Load your custom video dataset using DataLoader
+    train_dataset = QVPipeDataset(params["dataset_root"],
+                                  params["num_classes"],
+                                  params["num_key_frames"],
+                                  train_keys_path,
+                                  transform=train_transform,
+                                  frame_selection_method=params["frame_selection"])
+    train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
 
-    # Load train dataset
-    if params["train"]:
-        train_keys_path = params["dataset_root"] + "train_keys.json"
-        # Load your custom video dataset using DataLoader
-        train_dataset = QVPipeDataset(params["dataset_root"],
-                                      params["num_classes"],
-                                      params["num_key_frames"],
-                                      train_keys_path,
-                                      transform=train_transform,
-                                      frame_selection_method=params["frame_selection"])
-        train_loader = DataLoader(train_dataset, batch_size=params["batch_size"], shuffle=True)
-    else:
-        train_loader = None
-
+    # Load valid dataset
     valid_transform = transforms.Compose([
         transforms.Resize((params["resize_x"], params["resize_y"])),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-
-    # Load valid dataset
-    if params["valid"]:
-        valid_keys_path = params["dataset_root"] + "val_keys.json"
-        # Load your custom video dataset using DataLoader
-        valid_dataset = QVPipeDataset(params["dataset_root"],
-                                      params["num_classes"],
-                                      params["num_key_frames"],
-                                      valid_keys_path,
-                                      transform=valid_transform,
-                                      frame_selection_method=params["frame_selection"])
-        valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"])
-    else:
-        valid_loader = None
+    valid_keys_path = params["dataset_root"] + "val_keys.json"
+    # Load your custom video dataset using DataLoader
+    valid_dataset = QVPipeDataset(params["dataset_root"],
+                                  params["num_classes"],
+                                  params["num_key_frames"],
+                                  valid_keys_path,
+                                  transform=valid_transform,
+                                  frame_selection_method=params["frame_selection"])
+    valid_loader = DataLoader(valid_dataset, batch_size=params["batch_size"])
 
     return train_loader, valid_loader
 
 
-def train_step(params, data_loader, model, device, logger):
+def get_subset(data_loader, shrink_size=0.2, random_seed=33):
     dataset = data_loader.dataset
-    train_size = int(0.9 * len(dataset))
-    valid_size = len(dataset) - train_size
+    selected_size = int(shrink_size * len(dataset))
+    rejected_size = len(dataset) - selected_size
 
+    generator = torch.Generator().manual_seed(random_seed)
+    selected_set, rejected_set = random_split(dataset, [selected_size, rejected_size], generator)
+    return DataLoader(selected_set, batch_size=data_loader.batch_size)
+
+
+def train_step(params, train_data_loader, valid_data_loader, model, device, logger):
     # Define loss function and optimizer
     # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
@@ -194,12 +193,8 @@ def train_step(params, data_loader, model, device, logger):
 
         print("Training...")
 
-        train_set, valid_set = random_split(dataset, [train_size, valid_size])
-        train_loader = DataLoader(train_set, batch_size=params["batch_size"], shuffle=True)
-        valid_loader = DataLoader(valid_set, batch_size=params["batch_size"], shuffle=False)
-
         # Add progress bar
-        bar = progressbar.ProgressBar(maxval=len(dataset),
+        bar = progressbar.ProgressBar(maxval=len(train_data_loader.dataset),
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ',
                                                progressbar.Percentage()])
         bar.start()
@@ -208,7 +203,7 @@ def train_step(params, data_loader, model, device, logger):
         running_loss = []
 
         batch_done = 0
-        for inputs, labels in train_loader:
+        for inputs, labels in train_data_loader:
             # inputs = inputs.to(device)
             # labels = labels.to(device)
             curr_batch_len = len(inputs)
@@ -257,7 +252,7 @@ def train_step(params, data_loader, model, device, logger):
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
-        epoch_valid_loss = valid_step_on_epoch(params, valid_loader, model, device, logger)
+        epoch_valid_loss = valid_step_on_epoch(params, valid_data_loader, model, device, logger)
 
         scheduler.step(epoch_valid_loss)
 
