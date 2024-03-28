@@ -1,6 +1,8 @@
 import os.path
 import time
 import subprocess
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -20,7 +22,14 @@ import matplotlib.pyplot as plt
 
 class FrameExtraction:
     def __init__(self, method=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
-        needs_prep = ["histogram", "k_means"]
+
+        # ThreadPool
+        self.max_threads = 10
+        self.threadPool = ThreadPoolExecutor(max_workers=self.max_threads)
+        self.threads = []
+        self.running_threads = 0
+
+        needs_prep = ["motion", "less_blur"]
         if method is None:
             # prepare all methods
             methods = needs_prep
@@ -140,7 +149,17 @@ class FrameExtraction:
         cap.release()
 
     def _prepare_motion(self, video_path, json_file):
-        subprocess.run(["./video_main", video_path, json_file])
+        def thread(v_path, j_path):
+            subprocess.run(["./video_main", v_path, j_path])
+
+        if self.running_threads < self.max_threads:
+            self.threads.append(self.threadPool.submit(thread, video_path, json_file))
+            self.running_threads += 1
+        else:
+            concurrent.futures.wait(self.threads, return_when=concurrent.futures.FIRST_COMPLETED).done.pop()
+            self.threads = [t for t in self.threads if not t.done()]
+            self.threads.append(self.threadPool.submit(thread, video_path, json_file))
+            self.running_threads = len(self.threads) + 1
 
     def _prepare_less_blur(self, video_path, json_file):
         cap = self._open_video(video_path)
