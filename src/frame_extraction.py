@@ -197,9 +197,6 @@ class FrameExtraction:
             features = extract_resnet_features(frame, resnet_model)
             data["features_list"].append(np.array(features).tolist())
 
-            if frame_number == 3:
-                break
-
         # # Convert features to numpy array
         # features_array = np.array(features_list)
         #
