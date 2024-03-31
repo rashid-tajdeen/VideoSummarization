@@ -86,7 +86,6 @@ class FrameExtraction:
             # Progress printing
             count += 1
             print("(" + str(count) + "/" + str(total_count) + ")" + " done")
-            self._load_less_blur(self.video_directory + video_name, 5)
 
     def _prepare_uniform(self, cap, num_frames):
         selected_frame_idx = []
