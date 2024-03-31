@@ -29,6 +29,9 @@ class FrameExtraction:
         self.threads = []
         self.running_threads = 0
 
+        self.data_directory = dataset_root + "track1_raw_data/"
+        self.video_directory = dataset_root + "track1_raw_video/"
+
         needs_prep = ["motion", "less_blur"]
         if method is None:
             # prepare all methods
@@ -58,13 +61,11 @@ class FrameExtraction:
 
         # Prepare data
         print("Preparing " + method + " frame data...")
-        data_directory = dataset_root + "track1_raw_data/"
-        video_directory = dataset_root + "track1_raw_video/"
         count = 0
         total_count = len(video_names)
         for video_name in video_names:
             print(video_name)
-            json_data_file = data_directory + method + "/" + Path(video_name).stem + ".json"
+            json_data_file = self.data_directory + method + "/" + Path(video_name).stem + ".json"
 
             # json_data = {}
             if not os.path.isfile(json_data_file):
@@ -76,7 +77,7 @@ class FrameExtraction:
                 #     continue
 
                 # Open video
-                video_path = video_directory + video_name
+                video_path = self.video_directory + video_name
 
                 # Prepare data
                 prepare_method(video_path, json_data_file)
@@ -85,6 +86,7 @@ class FrameExtraction:
             # Progress printing
             count += 1
             print("(" + str(count) + "/" + str(total_count) + ")" + " done")
+            self._load_less_blur(self.video_directory + video_name, 5)
 
     def _prepare_uniform(self, cap, num_frames):
         selected_frame_idx = []
@@ -189,6 +191,33 @@ class FrameExtraction:
 
         # Close video
         cap.release()
+
+    def _load_less_blur(self, video_path, num_frames):
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+
+        # Open the data file
+        _, file = os.path.split(video_path)
+        json_file = self.data_directory + "less_blur/" + os.path.splitext(file)[0] + ".json"
+        with open(json_file, 'r') as f:
+            json_data = json.load(f)
+
+        # Select frame indices
+        data = json_data["laplacian_variance"]
+        average = sum(data) / len(data)
+        print("Average laplacian variance is", average)
+        valid_frame_idx = [index for index, value in enumerate(data) if value > average]
+        selected_frame_idx = random.sample(valid_frame_idx, num_frames)
+
+        # Select frames
+        selected_frames = self._get_frames(cap, selected_frame_idx)
+
+        cap.release()
+
+        return selected_frames
 
     def _prepare_k_means(self, video_path, json_file):
         cap = self._open_video(video_path)
