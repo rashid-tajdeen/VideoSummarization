@@ -219,8 +219,6 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_k_means(self, video_path, json_file):
-        cap = self._open_video(video_path)
-
         # Function to extract ResNet features from a frame
         def extract_resnet_features(fr, model):
             resized_frame = cv2.resize(fr, (224, 224))
@@ -230,11 +228,10 @@ class FrameExtraction:
 
         # Load pre-trained ResNet model
         resnet_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
-
-        data = {"features_list": []}
-
         # Extract ResNet features from each frame
+        features_array = []
         frame_number = 0
+        cap = self._open_video(video_path)
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -242,31 +239,29 @@ class FrameExtraction:
             frame_number += 1
             print("Frame number : ", frame_number)
             features = extract_resnet_features(frame, resnet_model)
-            data["features_list"].append(np.array(features).tolist())
+            features_array.append(np.array(features).tolist())
+        # Convert features to numpy array
+        features_array = np.array(features_array)
 
-        # # Convert features to numpy array
-        # features_array = np.array(features_list)
-        #
-        # # Perform K-means clustering
-        # kmeans = KMeans(n_clusters=num_frames, random_state=42)
-        # kmeans.fit(features_array)
-        #
-        # # # Select keyframes as centroids of clusters
-        # # selected_frame_idx = kmeans.cluster_centers_.argsort()[:, -1]
-        #
-        # # Select keyframes as centroids of clusters
-        # selected_frame_idx = []
-        # for cluster_center in kmeans.cluster_centers_:
-        #     distances = np.linalg.norm(features_array - cluster_center, axis=1)
-        #     closest_frame_index = np.argmin(distances)
-        #     selected_frame_idx.append(closest_frame_index)
-        #
-        # selected_frame_idx = np.array(selected_frame_idx)
-        # selected_frame_idx = np.sort(selected_frame_idx)
-        # selected_frame_idx = selected_frame_idx.tolist()
-        # print("selected_frame_idx : ", selected_frame_idx)
+        data = {}
+        for num_frames in [5, 10, 15]:
+            # Perform K-means clustering
+            kmeans = KMeans(n_clusters=num_frames, random_state=33)
+            kmeans.fit(features_array)
 
-        self._verify_data_count(data, cap)
+            # Select keyframes as centroids of clusters
+            selected_frame_idx = []
+            for cluster_center in kmeans.cluster_centers_:
+                distances = np.linalg.norm(features_array - cluster_center, axis=1)
+                closest_frame_index = np.argmin(distances)
+                selected_frame_idx.append(closest_frame_index)
+
+            selected_frame_idx = np.array(selected_frame_idx)
+            selected_frame_idx = np.sort(selected_frame_idx)
+            selected_frame_idx = selected_frame_idx.tolist()
+
+            data[str(num_frames) + "_keyframes"] = selected_frame_idx
+
         self._save_data(json_file, data)
 
         # Close video
