@@ -115,40 +115,6 @@ class FrameExtraction:
 
         return selected_frames
 
-    def _prepare_less_motion(self, video_path, json_file):
-        cap = self._open_video(video_path)
-
-        data = {"motion_magnitude": []}
-        prev_frame = None
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            current_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # Compute motion by calculating the absolute difference between current and previous frames
-            if prev_frame is not None:
-                result = ird.translation(prev_frame, current_frame)
-                motion = np.hypot(result["tvec"][0], result["tvec"][1])
-            else:
-                # High value to ignore
-                motion = 1000
-            data["motion_magnitude"].append(motion)
-
-            # Update the previous frame
-            prev_frame = current_frame.copy()
-
-        # # Find index of frames with min motion
-        # selected_frame_idx = np.argsort(motion_magnitude)[0:num_frames]
-        # selected_frame_idx = selected_frame_idx.tolist()
-
-        self._verify_data_count(data, cap)
-        self._save_data(json_file, data)
-
-        # Close video
-        cap.release()
-
     def _prepare_motion(self, video_path, json_file):
         def thread(v_path, j_path):
             subprocess.run(["./video_main", v_path, j_path])
@@ -161,6 +127,51 @@ class FrameExtraction:
             self.threads = [t for t in self.threads if not t.done()]
             self.threads.append(self.threadPool.submit(thread, video_path, json_file))
             self.running_threads = len(self.threads) + 1
+
+    def _load_motion(self, video_path, num_frames):
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+
+        # Open the data file
+        _, file = os.path.split(video_path)
+        json_file = self.data_directory + "motion/" + os.path.splitext(file)[0] + ".json"
+        with open(json_file, 'r') as f:
+            json_data = json.load(f)
+
+        # Leave out 1st frame as it does not have prev frame
+        rotation_data = json_data["rotation"][1:]
+        scale_data = json_data["scale"][1:]
+        x_data = json_data["x"][1:]
+        y_data = json_data["y"][1:]
+
+        rotation_average = sum(np.absolute(rotation_data)) / len(rotation_data)
+        scale_average = sum(np.absolute(scale_data)) / len(scale_data)
+        x_average = sum(np.absolute(x_data)) / len(x_data)
+        y_average = sum(np.absolute(y_data)) / len(y_data)
+
+        valid_frame_idx = []
+        for idx in range(len(json_data["x"])):
+            if abs(json_data["rotation"][idx]) < rotation_average and \
+                    abs(json_data["scale"][idx]) < scale_average and \
+                    abs(json_data["x"][idx]) < x_average and \
+                    abs(json_data["y"][idx]) < y_average:
+                valid_frame_idx.append(idx)
+
+        if len(valid_frame_idx) < num_frames:
+            required = num_frames - len(valid_frame_idx)
+            not_yet_selected = [i for i in range(len(json_data["x"])) if i not in valid_frame_idx]
+            valid_frame_idx += random.sample(not_yet_selected, required)
+
+        selected_frame_idx = random.sample(valid_frame_idx, num_frames)
+        # Select frames
+        selected_frames = self._get_frames(cap, selected_frame_idx)
+
+        cap.release()
+
+        return selected_frames
 
     def _prepare_less_blur(self, video_path, json_file):
         cap = self._open_video(video_path)
