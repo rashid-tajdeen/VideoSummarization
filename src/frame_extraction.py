@@ -278,6 +278,30 @@ class FrameExtraction:
         # Close video
         cap.release()
 
+    def _load_k_means(self, video_path, num_frames):
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+
+        # Open the data file
+        _, file = os.path.split(video_path)
+        json_file = self.data_directory + "k_means/" + os.path.splitext(file)[0] + ".json"
+        with open(json_file, 'r') as f:
+            json_data = json.load(f)
+
+        if str(num_frames) + "_keyframes" not in json_data.keys():
+            print("Data not prepared for the specified number of frames")
+            exit(1)
+        selected_frame_idx = json_data[str(num_frames) + "_keyframes"]
+        # Select frames
+        selected_frames = self._get_frames(cap, selected_frame_idx)
+
+        cap.release()
+
+        return selected_frames
+
     def _prepare_histogram(self, video_path, json_file):
         cap = self._open_video(video_path)
 
