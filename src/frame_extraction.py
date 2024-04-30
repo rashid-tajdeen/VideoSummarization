@@ -32,7 +32,7 @@ class FrameExtraction:
         self.data_directory = dataset_root + "track1_raw_data/"
         self.video_directory = dataset_root + "track1_raw_video/"
 
-        needs_prep = ["motion", "less_blur"]
+        needs_prep = ["k_means"]
         if method is None:
             # prepare all methods
             methods = needs_prep

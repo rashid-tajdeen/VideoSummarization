@@ -80,7 +80,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Command line arguments that might be helpful to run the code')
     # Add arguments
     parser.add_argument('--frame_selection', type=str,
-                        choices=['uniform', 'random', 'less_motion', 'less_blur'],
+                        choices=['uniform', 'random', 'motion', 'less_blur'],
                         default='uniform',
                         help='Frame selection method to be chosen from the provided options')
     parser.add_argument('--dataset_path', type=str,
