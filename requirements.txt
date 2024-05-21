@@ -5,6 +5,7 @@ torchnet
 opencv-python
 neptune
 progressbar
+scipy
 
 # Used for k-means
 scikit-learn

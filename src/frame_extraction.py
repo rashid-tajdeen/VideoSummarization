@@ -10,6 +10,7 @@ import json
 import random
 from pathlib import Path
 import imreg_dft as ird
+from scipy.stats import rankdata
 
 # Used for k-means
 from sklearn.cluster import KMeans
@@ -68,32 +69,32 @@ class FrameExtraction:
             json_data_file = self.data_directory + method + "/" + Path(video_name).stem + ".json"
 
             # json_data = {}
-            if not os.path.isfile(json_data_file):
-                # with open(json_data_file, 'r') as file:
-                #     json_data = json.load(file)
+            #if not os.path.isfile(json_data_file):
+            # with open(json_data_file, 'r') as file:
+            #     json_data = json.load(file)
 
-                # if method in json_data.keys():
-                #     print("Exists")
-                #     continue
+            # if method in json_data.keys():
+            #     print("Exists")
+            #     continue
 
-                # Open video
-                video_path = self.video_directory + video_name
+            # Open video
+            video_path = self.video_directory + video_name
 
-                # Prepare data
-                prepare_method(video_path, json_data_file)
-                # json_data[method] = prepared_data
+            # Prepare data
+            prepare_method(video_path, json_data_file)
+            # json_data[method] = prepared_data
 
             # Progress printing
             count += 1
             print("(" + str(count) + "/" + str(total_count) + ")" + " done")
 
-    def _prepare_uniform(self, cap, num_frames):
-        selected_frame_idx = []
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        for i in range(num_frames):
-            frame_idx = int(i * ((total_frames - 1) / (num_frames - 1)))
-            selected_frame_idx.append(frame_idx)
-        return selected_frame_idx
+    #def _prepare_uniform(self, cap, num_frames):
+    #    selected_frame_idx = []
+    #    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    #    for i in range(num_frames):
+    #        frame_idx = int(i * ((total_frames - 1) / (num_frames - 1)))
+    #        selected_frame_idx.append(frame_idx)
+    #    return selected_frame_idx
 
     def _prepare_random(self, cap, num_frames):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -116,17 +117,34 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_motion(self, video_path, json_file):
-        def thread(v_path, j_path):
-            subprocess.run(["./video_main", v_path, j_path])
 
-        if self.running_threads < self.max_threads:
-            self.threads.append(self.threadPool.submit(thread, video_path, json_file))
-            self.running_threads += 1
+        def compute_frame_weightage():
+            data = self._load_data_from_file(json_file)
+            if not "frame_weightage" in data.keys():
+                frame_weightage = np.zeros(len(data["x"]))
+                for parameter in data.keys():
+                    sorted_indices = sorted(range(len(data[parameter])), key=lambda k: data[parameter][k], reverse=True)
+                    frame_weightage += np.array([sorted_indices.index(i) + 1 for i in range(len(sorted_indices))])
+                frame_weightage = frame_weightage/len(data.keys())
+                data["frame_weightage"] = frame_weightage.tolist()
+                self._save_data_to_file(json_file, data)
+
+        # Skip preparation if file already exists
+        if not os.path.isfile(json_file):
+            def thread(v_path, j_path):
+                subprocess.run(["../imreg_fmt/build/video_main", v_path, j_path])
+                compute_frame_weightage()
+            if self.running_threads < self.max_threads:
+                self.threads.append(self.threadPool.submit(thread, video_path, json_file))
+                self.running_threads += 1
+            else:
+                concurrent.futures.wait(self.threads, return_when=concurrent.futures.FIRST_COMPLETED).done.pop()
+                self.threads = [t for t in self.threads if not t.done()]
+                self.threads.append(self.threadPool.submit(thread, video_path, json_file))
+                self.running_threads = len(self.threads) + 1
         else:
-            concurrent.futures.wait(self.threads, return_when=concurrent.futures.FIRST_COMPLETED).done.pop()
-            self.threads = [t for t in self.threads if not t.done()]
-            self.threads.append(self.threadPool.submit(thread, video_path, json_file))
-            self.running_threads = len(self.threads) + 1
+            compute_frame_weightage()
+
 
     def _load_motion(self, video_path, num_frames):
         # Open the video file
@@ -174,30 +192,41 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_less_blur(self, video_path, json_file):
+
+        # Skip preparation if file already exists
+        if os.path.isfile(json_file):
+            data = self._load_data_from_file(json_file)
+        else:
+            data = {"notes": "More laplacian variance means less blurry"}
+
+
+        change_flag = False
         cap = self._open_video(video_path)
 
-        data = {"laplacian_variance": [],
-                "notes": "More laplacian variance means less blurry"}
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        if not "laplacian_variance" in data.keys():
+            laplacian_variance = []
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                # Calculate blurriness
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # if variance is less, image is more blurry
+                lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+                laplacian_variance.append(lap_var)
 
-            # Calculate blurriness
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            # if variance is less, image is more blurry
-            laplacian_variance = cv2.Laplacian(gray, cv2.CV_64F).var()
+            data["laplacian_variance"] = laplacian_variance
+            change_flag = True
 
-            data["laplacian_variance"].append(laplacian_variance)
+        if not "frame_weightage" in data.keys():
+            sorted_indices = sorted(range(len(data["laplacian_variance"])), key=lambda k: data["laplacian_variance"][k])
+            data["frame_weightage"] = [sorted_indices.index(i) + 1 for i in range(len(sorted_indices))]
+            change_flag = True
 
-        # # Arrange frame index in increasing order of blurriness
-        # selected_frame_idx = np.argsort(laplace_var_magnitude)
-        # # Choose only the number of frames we need
-        # selected_frame_idx = selected_frame_idx[0:num_frames]
-        # selected_frame_idx = selected_frame_idx.tolist()
 
-        self._verify_data_count(data, cap)
-        self._save_data(json_file, data)
+        if change_flag:
+            self._verify_data_count(data, cap)
+            self._save_data_to_file(json_file, data)
 
         # Close video
         cap.release()
@@ -230,6 +259,23 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_k_means(self, video_path, json_file):
+
+        cluster_nums = [5]
+        clusters_to_do = []
+
+        # Skip preparation if file already exists
+        if os.path.isfile(json_file):
+            all_data = self._load_data_from_file(json_file)
+            for k in cluster_nums:
+                if str(k) + "_keyframes" not in all_data.keys():
+                    clusters_to_do.append(k)
+
+            if len(clusters_to_do) == 0:
+                return
+        else:
+            all_data = {}
+            clusters_to_do = cluster_nums
+
         # Function to extract ResNet features from a frame
         def extract_resnet_features(fr, model):
             resized_frame = cv2.resize(fr, (224, 224))
@@ -254,26 +300,35 @@ class FrameExtraction:
         # Convert features to numpy array
         features_array = np.array(features_array)
 
-        data = {}
-        for num_frames in [5, 10, 15]:
+        for num_frames in clusters_to_do:
             # Perform K-means clustering
             kmeans = KMeans(n_clusters=num_frames, random_state=33)
             kmeans.fit(features_array)
 
-            # Select keyframes as centroids of clusters
-            selected_frame_idx = []
-            for cluster_center in kmeans.cluster_centers_:
-                distances = np.linalg.norm(features_array - cluster_center, axis=1)
-                closest_frame_index = np.argmin(distances)
-                selected_frame_idx.append(closest_frame_index)
+            cluster_labels = []
+            distance_to_centroid = []
 
-            selected_frame_idx = np.array(selected_frame_idx)
-            selected_frame_idx = np.sort(selected_frame_idx)
-            selected_frame_idx = selected_frame_idx.tolist()
+            # Assign frames to their corresponding clusters
+            for frame_idx, frame_features in enumerate(features_array):
+                cluster_label = kmeans.labels_[frame_idx]
+                distance = np.linalg.norm(frame_features - kmeans.cluster_centers_[cluster_label])
 
-            data[str(num_frames) + "_keyframes"] = selected_frame_idx
+                cluster_labels.append(int(cluster_label))
+                distance_to_centroid.append(float(distance))
 
-        self._save_data(json_file, data)
+            data = {"cluster_labels": cluster_labels,
+                    "distance_to_centroid": distance_to_centroid}
+
+            sorted_indices = sorted(range(len(data["distance_to_centroid"])), key=lambda k: data["distance_to_centroid"][k], reverse=True)
+            data["frame_weightage"] = [sorted_indices.index(i) + 1 for i in range(len(sorted_indices))]
+
+            all_data[str(num_frames) + "_keyframes"] = data
+
+        print(data)
+        print("####################################")
+        print(all_data)
+
+        self._save_data_to_file(json_file, all_data)
 
         # Close video
         cap.release()
@@ -303,6 +358,11 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_histogram(self, video_path, json_file):
+
+        # Skip preparation if file already exists
+        if os.path.isfile(json_file):
+            return
+
         cap = self._open_video(video_path)
 
         def calculate_histogram(curr_frame):
@@ -376,7 +436,7 @@ class FrameExtraction:
         # plt.show()
 
         self._verify_data_count(data, cap)
-        self._save_data(json_file, data)
+        self._save_data_to_file(json_file, data)
 
         # Close video
         cap.release()
@@ -418,7 +478,13 @@ class FrameExtraction:
             exit()
         return cap
 
-    def _save_data(self, file, data):
+    def _load_data_from_file(self, file):
+        # Load the data from a JSON file
+        with open(file, 'r') as f:
+            data = json.load(f)
+        return data
+
+    def _save_data_to_file(self, file, data):
         # Save the data in a JSON file
         with open(file, 'w') as f:
             json.dump(data, f)
