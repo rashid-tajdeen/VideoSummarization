@@ -110,9 +110,10 @@ class FrameExtraction:
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         selected_frame_idx = random.sample(range(total_frames), num_frames)
-        selected_frames = self._get_frames(cap, selected_frame_idx)
 
         cap.release()
+
+        selected_frames = self._get_frames(video_path, selected_frame_idx)
 
         return selected_frames
 
@@ -442,19 +443,49 @@ class FrameExtraction:
         cap.release()
 
     def load_frames(self, video_path, method, num_frames):
-        # data_file = "../frame_extraction/" + method + "_" + str(num_frames) + "frames.json"
-        # with open(data_file) as df:
-        #     data = json.load(df)
-        # video_name = os.path.split(video_path)[1]
-        # selected_frame_idx = data[video_name]
 
-        # Defining method
-        load_method = getattr(self, "_load_" + method)
-        selected_frames = load_method(video_path, num_frames)
+        if method == "random":
+            return self._load_random(self, video_path, num_frames)
+        elif method == "all":
+            method = ["less_blur", "motion"]
+        else:
+            method = [method]
 
+        frame_weightage = np.array([])
+
+        for meth in method:
+            # Open the data file
+            _, file = os.path.split(video_path)
+            json_file = self.data_directory + meth + "/" + os.path.splitext(file)[0] + ".json"
+            with open(json_file, 'r') as f:
+                json_data = json.load(f)
+
+            # Special handling for k-means as it depends on frame count
+            if meth == "k_means":
+                json_data = json_data[str(num_frames) + "_keyframes"]
+            # Initialise for the firse time
+            if len(frame_weightage) == 0:
+                frame_weightage = np.zeros(len(json_data["frame_weightage"]))
+
+            # Select frame indices
+            frame_weightage += json_data["frame_weightage"]
+
+        # Get frame indices in descending order of frame_weightage
+        frames_by_priority = np.argsort(frame_weightage)[::-1]
+        # Select only the top frames matching the required number of frames
+        selected_frame_idx = frames_by_priority[:num_frames]
+
+        # Get selected frames
+        selected_frames = self._get_frames(video_path, selected_frame_idx)
         return selected_frames
 
-    def _get_frames(self, cap, selected_frame_idx):
+    def _get_frames(self, video_path, selected_frame_idx):
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Cannot open video at :", video_path)
+            exit()
+
         selected_frames = []
         for frame_idx in selected_frame_idx:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -463,6 +494,10 @@ class FrameExtraction:
             selected_frames.append(frame)
 
         selected_frames = np.array(selected_frames)
+
+        # Close video
+        cap.release()
+
         return selected_frames
 
     def _verify_data_count(self, data, cap):
