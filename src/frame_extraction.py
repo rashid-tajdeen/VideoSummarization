@@ -359,12 +359,9 @@ class FrameExtraction:
         return selected_frames
 
     def _prepare_histogram(self, video_path, json_file):
-
         # Skip preparation if file already exists
         if os.path.isfile(json_file):
             return
-
-        cap = self._open_video(video_path)
 
         def calculate_histogram(curr_frame):
             # hist_b = cv2.calcHist([curr_frame], [0], None, [256], [0, 256])
@@ -408,11 +405,15 @@ class FrameExtraction:
             diff = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CHISQR)
             return diff
 
-        data = {"histogram": []}
+        cap = self._open_video(video_path)
 
-        # # Read the first frame and calculate its histogram
-        # ret, prev_frame = cap.read()
-        # prev_hist = calculate_histogram(prev_frame)
+        data = {"histogram_diff": []}
+
+        # Read the first frame and calculate its histogram
+        ret, prev_frame = cap.read()
+        prev_hist = calculate_histogram(prev_frame)
+        #data["histogram"].append(prev_hist)
+        data["histogram_diff"].append(0)
 
         while True:
             ret, frame = cap.read()
@@ -420,20 +421,22 @@ class FrameExtraction:
                 break
 
             # Calculate histogram for the current frame
-            curr_hist = calculate_histogram(frame).tolist()
-            data["histogram"].append(curr_hist)
+            curr_hist = calculate_histogram(frame)
+            #data["histogram"].append(curr_hist)
 
-            # # Calculate histogram difference between current and previous frames
-            # curr_diff = calculate_frame_difference(prev_hist, curr_hist)
-            #
-            # hist_differences.append(curr_diff)
+            # Calculate histogram difference between current and previous frames
+            curr_diff = calculate_frame_difference(prev_hist, curr_hist)
+
+            data["histogram_diff"].append(curr_diff)
             # Update previous histogram
-            # prev_hist = curr_hist
+            prev_hist = curr_hist
 
-        # plt.plot(hist_differences)
+        sorted_indices = sorted(range(len(data["histogram_diff"])), key=lambda k: data["histogram_diff"][k])
+        data["frame_weightage"] = [sorted_indices.index(i) + 1 for i in range(len(sorted_indices))]
+
+        # plt.plot(histogram_diff)
         # plt.show()
-        #
-        # plt.plot(np.cumsum(hist_differences))
+        # plt.plot(np.cumsum(histogram_diff))
         # plt.show()
 
         self._verify_data_count(data, cap)
