@@ -18,6 +18,7 @@ class QVPipeDataset(torch.utils.data.Dataset):
         self.num_key_frames = num_key_frames
         self.transform = transform
         self.frame_selection_method = frame_selection_method
+        self.meth_prio = None
 
         video_directory = dataset_root + "track1_raw_video/"
 
@@ -50,7 +51,8 @@ class QVPipeDataset(torch.utils.data.Dataset):
         video_path = self.video_paths[idx]
         video_summary = self.frame_extraction.load_frames(video_path,
                                                           self.frame_selection_method,
-                                                          self.num_key_frames)
+                                                          self.num_key_frames,
+                                                          self.meth_prio)
         label = torch.Tensor(self.labels[idx])
         if self.transform is not None:
             video_summary = torch.from_numpy(video_summary)
@@ -62,6 +64,12 @@ class QVPipeDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.video_paths)
+
+    def update_method_priorities(self, meth_prio, logger):
+        self.meth_prio = [float(i) for i in meth_prio]
+        logger["method_priorities/less_blur"].append(self.meth_prio[0])
+        logger["method_priorities/motion"].append(self.meth_prio[1])
+        print("Method priorities : ", self.meth_prio)
 
 
 def main():

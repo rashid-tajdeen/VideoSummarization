@@ -445,17 +445,18 @@ class FrameExtraction:
         # Close video
         cap.release()
 
-    def load_frames(self, video_path, method, num_frames):
+    def load_frames(self, video_path, method, num_frames, meth_prio):
 
         if method == "random":
             return self._load_random(self, video_path, num_frames)
         elif method == "all":
-            method = ["less_blur", "motion"]
+            method = ["less_blur", "motion", "histogram"]
         else:
             method = [method]
 
         frame_weightage = np.array([])
 
+        meth_count = 0
         for meth in method:
             # Open the data file
             _, file = os.path.split(video_path)
@@ -470,8 +471,9 @@ class FrameExtraction:
             if len(frame_weightage) == 0:
                 frame_weightage = np.zeros(len(json_data["frame_weightage"]))
 
-            # Select frame indices
-            frame_weightage += json_data["frame_weightage"]
+            # Compute frame weightage
+            frame_weightage += np.array(json_data["frame_weightage"]) * meth_prio[meth_count]
+            meth_count += 1
 
         # Get frame indices in descending order of frame_weightage
         frames_by_priority = np.argsort(frame_weightage)[::-1]

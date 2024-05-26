@@ -92,12 +92,23 @@ class TModel2(nn.Module):
                                         nn.Linear(1024, num_classes, bias=True))
         #self.num_images = num_images
 
+        # Define learnable parameters matching the number of methods
+        # Order corresponds to ['less_blur', 'motion', "histogram", "k_means"]
+        self.method_priorities = nn.ParameterList([
+            nn.Parameter(torch.randn(1)) for _ in range(3)
+        ])
+
     def forward(self, img):
         B, T, C, H, W = img.size()
         img = img.view(B*T, C, H, W)
         out = self.cls_model(img)
         out = out.squeeze(2).squeeze(2)
         out = out.view(B, -1)
+
+        # Incorporate the learnable parameters as additional biases
+        params_sum = sum(self.method_priorities)
+        out = out + params_sum
+
         out = self.classifier(out)
         return out
 

@@ -58,6 +58,8 @@ def main():
                             params["resize_x"])
     # model = Custom3DModel(expected_input_shape, params["num_classes"])
     model = TModel2(params["num_key_frames"], params["num_classes"])
+    train_loader.dataset.update_method_priorities(model.method_priorities, logger)
+    print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
     # model = model.to(device)
 
     # Start to train on existing model
@@ -80,7 +82,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Command line arguments that might be helpful to run the code')
     # Add arguments
     parser.add_argument('--frame_selection', type=str,
-                        choices=['random', 'motion', 'less_blur', "k_means", "histogram", "all"],
+                        choices=['random', 'less_blur', 'motion', "histogram", "k_means", "all"],
                         default='uniform',
                         help='Frame selection method to be chosen from the provided options')
     parser.add_argument('--dataset_path', type=str,
@@ -173,6 +175,8 @@ def get_subset(data_loader, shrink_size=0.2, random_seed=33):
 
 
 def train_step(params, train_data_loader, valid_data_loader, model, device, logger):
+
+    print("Inside train step", [float(model.method_priorities[0]), float(model.method_priorities[1])])
     # Define loss function and optimizer
     # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
@@ -203,6 +207,12 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
         running_loss = []
 
         batch_done = 0
+
+        print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
+
+        #print(model.method_priorities[0])
+        #print(model.method_priorities[1])
+
         for inputs, labels in train_data_loader:
             # inputs = inputs.to(device)
             # labels = labels.to(device)
@@ -231,6 +241,8 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
         print(f"Epoch Train Loss: {epoch_loss:.4f}")
         logger["epoch/train_loss"].append(epoch_loss)
 
+        print("After epoch", [float(model.method_priorities[0]), float(model.method_priorities[1])])
+
         # Close progress bar
         bar.finish()
 
@@ -245,13 +257,16 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
                     break
             else:
                 trigger_times = 0
+                train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
                 torch.save(model.state_dict(), params["model_path"])
                 print("Model saved to ", params["model_path"])
             prev_loss = current_loss
         else:
+            train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
+        valid_data_loader.dataset.dataset.update_method_priorities(model.method_priorities, logger)
         epoch_valid_loss = valid_step_on_epoch(params, valid_data_loader, model, device, logger)
 
         scheduler.step(epoch_valid_loss)
