@@ -33,7 +33,7 @@ class FrameExtraction:
         self.data_directory = dataset_root + "track1_raw_data/"
         self.video_directory = dataset_root + "track1_raw_video/"
 
-        needs_prep = ["k_means"]
+        needs_prep = ["entropy"]
         if method is None:
             # prepare all methods
             methods = needs_prep
@@ -444,6 +444,45 @@ class FrameExtraction:
 
         # Close video
         cap.release()
+
+    def _prepare_entropy(self, video_path, json_file):
+        # Skip preparation if file already exists
+        if os.path.isfile(json_file):
+            return
+
+        def calculate_entropy(frame):
+            # Convert frame to grayscale
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Compute the histogram
+            hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+            # Normalize the histogram
+            hist = hist / hist.sum()
+            # Compute the entropy
+            entropy = -np.sum(hist * np.log2(hist + np.finfo(float).eps))
+            return entropy
+
+        cap = cv2.VideoCapture(video_path)
+
+        data = {"entropy": []}
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Calculate the entropy of the current frame
+            entropy = calculate_entropy(frame)
+            data["entropy"].append(float(entropy))
+
+        sorted_indices = sorted(range(len(data["entropy"])), key=lambda k: data["entropy"][k])
+        data["frame_weightage"] = [sorted_indices.index(i) + 1 for i in range(len(sorted_indices))]
+
+        self._verify_data_count(data, cap)
+        self._save_data_to_file(json_file, data)
+
+        # Close video
+        cap.release()
+
 
     def load_frames(self, video_path, method, num_frames, meth_prio):
 

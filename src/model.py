@@ -95,7 +95,7 @@ class TModel2(nn.Module):
         # Define learnable parameters matching the number of methods
         # Order corresponds to ['less_blur', 'motion', "histogram", "k_means"]
         self.method_priorities = nn.ParameterList([
-            nn.Parameter(torch.randn(1)) for _ in range(3)
+            nn.Parameter(torch.ones(1)) for _ in range(3)
         ])
 
     def forward(self, img):

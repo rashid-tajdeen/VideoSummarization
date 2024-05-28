@@ -69,6 +69,8 @@ class QVPipeDataset(torch.utils.data.Dataset):
         self.meth_prio = [float(i) for i in meth_prio]
         logger["method_priorities/less_blur"].append(self.meth_prio[0])
         logger["method_priorities/motion"].append(self.meth_prio[1])
+        logger["method_priorities/histogram"].append(self.meth_prio[2])
+        #logger["method_priorities/k_means"].append(self.meth_prio[3])
         print("Method priorities : ", self.meth_prio)
 
 
