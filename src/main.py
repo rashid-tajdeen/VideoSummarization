@@ -101,7 +101,7 @@ def parse_arguments():
                         default=17, choices=range(1, 18),
                         help='Number of classes to train on (value must range from 1 to 17)')
     parser.add_argument('--batch_size', '-b', type=int,
-                        default=16,
+                        default=32,
                         help='Batch size for training')
     parser.add_argument('--train', action='store_true',
                         help='Flag to enable training')
