@@ -10,6 +10,7 @@ import torchnet
 import neptune
 import argparse
 import progressbar
+from datetime import datetime
 
 from torch.nn.functional import binary_cross_entropy_with_logits
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -24,7 +25,7 @@ def main():
     # Parse the command-line arguments
     args = parse_arguments()
 
-    logger = neptune_logger()
+    run_id = str(args.num_frames) + 'frame_' + '_'.join(args.frame_selection) + '_' + datetime.today().strftime('%Y_%m_%d_%H:%M')
 
     params = {"frame_selection": args.frame_selection,
               "dataset_root": args.dataset_path,
@@ -36,17 +37,17 @@ def main():
               "resize_x": 240,
               "resize_y": 240,
               "channels": 3,
-              "model_path": '../models/' +
-                            args.frame_selection + '_' +
-                            str(args.num_frames) + 'frames_' +
-                            str(args.classes) + 'classes_' +
-                            str(args.epochs) + 'epochs' +
-                            '.pth',
+              "model_path": '../models/' + run_id + '.pth',
               "train": args.train,
               "valid": args.valid,
               "early_stopping": args.early_stopping
               }
-    logger["parameters"] = params
+    
+    log_params = params.copy()
+    log_params["frame_selection"] = '_'.join(log_params["frame_selection"])
+
+    logger = neptune_logger(run_id)
+    logger["parameters"] = log_params
 
     train_loader, valid_loader = load_dataset(params)
     epoch_valid_loader = get_subset(valid_loader)
@@ -58,8 +59,8 @@ def main():
                             params["resize_x"])
     # model = Custom3DModel(expected_input_shape, params["num_classes"])
     model = TModel2(params["num_key_frames"], params["num_classes"])
-    train_loader.dataset.update_method_priorities(model.method_priorities, logger)
-    print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
+    #train_loader.dataset.update_method_priorities(model.method_priorities, logger)
+    #print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
     # model = model.to(device)
 
     # Start to train on existing model
@@ -81,9 +82,12 @@ def parse_arguments():
     # Create an ArgumentParser object
     parser = argparse.ArgumentParser(description='Command line arguments that might be helpful to run the code')
     # Add arguments
-    parser.add_argument('--frame_selection', type=str,
-                        choices=['random', 'less_blur', 'motion', "histogram", "k_means", "all"],
-                        default='uniform',
+    #parser.add_argument('--frame_selection', type=str,
+    #                    choices=['random', 'less_blur', 'motion', "histogram", "k_means", "all"],
+    #                    default='uniform',
+    #                    help='Frame selection method to be chosen from the provided options')
+    parser.add_argument('--frame_selection', nargs='+',
+                        required=True,
                         help='Frame selection method to be chosen from the provided options')
     parser.add_argument('--dataset_path', type=str,
                         default='../dataset/qv_pipe_dataset/',
@@ -113,9 +117,10 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def neptune_logger():
+def neptune_logger(run_id):
     # Credentials
     logger = neptune.init_run(
+        custom_run_id=run_id,
         project="rashid.deutschland/QVPipe",
         api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiIyZDhmYjkzZC0xMGUwLTRkZjAtOGFjMC1kNGU3NzA3YmQ3ZjkifQ==",
     )
@@ -176,7 +181,7 @@ def get_subset(data_loader, shrink_size=0.2, random_seed=33):
 
 def train_step(params, train_data_loader, valid_data_loader, model, device, logger):
 
-    print("Inside train step", [float(model.method_priorities[0]), float(model.method_priorities[1])])
+    #print("Inside train step", [float(model.method_priorities[0]), float(model.method_priorities[1])])
     # Define loss function and optimizer
     # optimizer = optim.Adam(model.parameters(), lr=params["learning_rate"])
     optimizer = torch.optim.SGD(model.parameters(), lr=params["learning_rate"], momentum=0.9, weight_decay=1e-3)
@@ -208,7 +213,7 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
 
         batch_done = 0
 
-        print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
+        #print([float(model.method_priorities[0]), float(model.method_priorities[1]), float(model.method_priorities[2])])
 
         #print(model.method_priorities[0])
         #print(model.method_priorities[1])
@@ -241,7 +246,7 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
         print(f"Epoch Train Loss: {epoch_loss:.4f}")
         logger["epoch/train_loss"].append(epoch_loss)
 
-        print("After epoch", [float(model.method_priorities[0]), float(model.method_priorities[1])])
+        #print("After epoch", [float(model.method_priorities[0]), float(model.method_priorities[1])])
 
         # Close progress bar
         bar.finish()
@@ -257,16 +262,16 @@ def train_step(params, train_data_loader, valid_data_loader, model, device, logg
                     break
             else:
                 trigger_times = 0
-                train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
+                #train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
                 torch.save(model.state_dict(), params["model_path"])
                 print("Model saved to ", params["model_path"])
             prev_loss = current_loss
         else:
-            train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
+            #train_data_loader.dataset.update_method_priorities(model.method_priorities, logger)
             torch.save(model.state_dict(), params["model_path"])
             print("Model saved to ", params["model_path"])
 
-        valid_data_loader.dataset.dataset.update_method_priorities(model.method_priorities, logger)
+        #valid_data_loader.dataset.dataset.update_method_priorities(model.method_priorities, logger)
         epoch_valid_loss = valid_step_on_epoch(params, valid_data_loader, model, device, logger)
 
         scheduler.step(epoch_valid_loss)

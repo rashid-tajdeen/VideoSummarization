@@ -13,12 +13,12 @@ class QVPipeDataset(torch.utils.data.Dataset):
                  num_key_frames=5,
                  keys_path="../dataset/qv_pipe_dataset/train_keys.json",
                  transform=None,
-                 frame_selection_method='uniform'):
+                 frame_selection_method=["random"]):
 
         self.num_key_frames = num_key_frames
         self.transform = transform
         self.frame_selection_method = frame_selection_method
-        self.meth_prio = None
+        self.meth_prio = [1 for i in frame_selection_method]
 
         video_directory = dataset_root + "track1_raw_video/"
 
@@ -100,7 +100,7 @@ def main():
                                   5,
                                   "../dataset/qv_pipe_dataset/train_keys.json",
                                   transform=transform,
-                                  frame_selection_method='uniform')
+                                  frame_selection_method=["random"])
 
     all_ids = np.array(list(range(len(train_dataset))))
     ids = all_ids[np.random.choice(len(all_ids), size=3, replace=False)]

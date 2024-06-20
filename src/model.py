@@ -94,9 +94,9 @@ class TModel2(nn.Module):
 
         # Define learnable parameters matching the number of methods
         # Order corresponds to ['less_blur', 'motion', "histogram", "k_means"]
-        self.method_priorities = nn.ParameterList([
-            nn.Parameter(torch.ones(1)) for _ in range(3)
-        ])
+        #self.method_priorities = nn.ParameterList([
+        #    nn.Parameter(torch.ones(1)) for _ in range(3)
+        #])
 
     def forward(self, img):
         B, T, C, H, W = img.size()
@@ -106,8 +106,8 @@ class TModel2(nn.Module):
         out = out.view(B, -1)
 
         # Incorporate the learnable parameters as additional biases
-        params_sum = sum(self.method_priorities)
-        out = out + params_sum
+        #params_sum = sum(self.method_priorities)
+        #out = out + params_sum
 
         out = self.classifier(out)
         return out

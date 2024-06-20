@@ -13,3 +13,6 @@ __pycache__
 
 # Neptune cache
 .neptune
+
+# Execution files
+/execution*

@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 
 
 class FrameExtraction:
-    def __init__(self, method=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
+    def __init__(self, methods=None, dataset_root="../dataset/qv_pipe_dataset/", num_frames=5):
 
         # ThreadPool
         self.max_threads = 10
@@ -33,14 +33,15 @@ class FrameExtraction:
         self.data_directory = dataset_root + "track1_raw_data/"
         self.video_directory = dataset_root + "track1_raw_video/"
 
-        needs_prep = ["entropy"]
-        if method is None:
+        needs_prep = ["k_means"]
+        if methods is None:
             # prepare all methods
-            methods = needs_prep
-            for method in methods:
+            for method in needs_prep:
                 self.prepare(method, dataset_root, num_frames)
-        elif method in needs_prep:
-            self.prepare(method, dataset_root, num_frames)
+        else:
+            for method in methods:
+                if method in needs_prep:
+                    self.prepare(method, dataset_root, num_frames)
 
     def prepare(self, method, dataset_root, num_frames):
         data = {}
@@ -121,14 +122,33 @@ class FrameExtraction:
 
         def compute_frame_weightage():
             data = self._load_data_from_file(json_file)
-            if not "frame_weightage" in data.keys():
-                frame_weightage = np.zeros(len(data["x"]))
-                for parameter in data.keys():
-                    sorted_indices = sorted(range(len(data[parameter])), key=lambda k: data[parameter][k], reverse=True)
-                    frame_weightage += np.array([sorted_indices.index(i) + 1 for i in range(len(sorted_indices))])
-                frame_weightage = frame_weightage/len(data.keys())
-                data["frame_weightage"] = frame_weightage.tolist()
-                self._save_data_to_file(json_file, data)
+
+            #if not "frame_weightage" in data.keys():
+
+            #frame_weightage = np.zeros(len(data["x"]))
+            #for parameter in data.keys():
+
+            # Normalize the data neglecting the first frame as it has no frame to compare
+            norm_translations_x = data["x"][1:] / np.max(np.abs(data["x"][1:]))
+            norm_translations_y = data["y"][1:] / np.max(np.abs(data["y"][1:]))
+            norm_scales = np.abs(np.array(data["scale"][1:]) - 1) / np.max(np.abs(np.array(data["scale"][1:]) - 1))
+            norm_rotations = np.abs(data["rotation"][1:]) / np.max(np.abs(data["rotation"][1:]))
+
+            wts = [1, 1, 1]
+
+            motion = wts[0] * (norm_translations_x + norm_translations_y) + wts[1] * norm_scales + wts[2] * norm_rotations
+            
+            motion = np.concatenate([np.array([1000]), motion])
+
+
+            sorted_indices = sorted(range(len(motion)), key=lambda k: motion[k], reverse=True)
+            frame_weightage = np.array([sorted_indices.index(i) + 1 for i in range(len(sorted_indices))])
+            
+
+            #frame_weightage = frame_weightage/len(data.keys())
+            data["frame_weightage"] = frame_weightage.tolist()
+
+            self._save_data_to_file(json_file, data)
 
         # Skip preparation if file already exists
         if not os.path.isfile(json_file):
@@ -261,13 +281,14 @@ class FrameExtraction:
 
     def _prepare_k_means(self, video_path, json_file):
 
-        cluster_nums = [5]
+        cluster_nums = [5, 1]
         clusters_to_do = []
 
         # Skip preparation if file already exists
         if os.path.isfile(json_file):
             all_data = self._load_data_from_file(json_file)
             for k in cluster_nums:
+                print(k)
                 if str(k) + "_keyframes" not in all_data.keys():
                     clusters_to_do.append(k)
 
@@ -325,9 +346,9 @@ class FrameExtraction:
 
             all_data[str(num_frames) + "_keyframes"] = data
 
-        print(data)
-        print("####################################")
-        print(all_data)
+        #print(data)
+        #print("####################################")
+        #print(all_data)
 
         self._save_data_to_file(json_file, all_data)
 
@@ -484,19 +505,18 @@ class FrameExtraction:
         cap.release()
 
 
-    def load_frames(self, video_path, method, num_frames, meth_prio):
+    def load_frames(self, video_path, methods, num_frames, meth_prio):
 
-        if method == "random":
-            return self._load_random(self, video_path, num_frames)
-        elif method == "all":
-            method = ["less_blur", "motion", "histogram"]
-        else:
-            method = [method]
+        if methods == ["random"]:
+            return self._load_random(video_path, num_frames)
+        #elif method == "all":
+        #    method = ["less_blur", "motion", "histogram"]
+        #else:
+        #    method = [method]
 
         frame_weightage = np.array([])
 
-        meth_count = 0
-        for meth in method:
+        for meth, multiplier in zip(methods, meth_prio):
             # Open the data file
             _, file = os.path.split(video_path)
             json_file = self.data_directory + meth + "/" + os.path.splitext(file)[0] + ".json"
@@ -511,13 +531,29 @@ class FrameExtraction:
                 frame_weightage = np.zeros(len(json_data["frame_weightage"]))
 
             # Compute frame weightage
-            frame_weightage += np.array(json_data["frame_weightage"]) * meth_prio[meth_count]
-            meth_count += 1
+            #frame_weightage += np.square(np.array(json_data["frame_weightage"])) * multiplier
+
+            frame_weightage += np.array(json_data["frame_weightage"]) * multiplier
 
         # Get frame indices in descending order of frame_weightage
         frames_by_priority = np.argsort(frame_weightage)[::-1]
-        # Select only the top frames matching the required number of frames
-        selected_frame_idx = frames_by_priority[:num_frames]
+        # Select 5 times the required number of frames for randomness
+        eligible_frame_idx = frames_by_priority[:(num_frames*5)] if len(frames_by_priority)>(num_frames*5) else frames_by_priority
+        # Select the required number of frames randomly
+        selected_frame_idx = random.sample(eligible_frame_idx.tolist(), num_frames)
+
+        #selected_frame_idx = []
+        #while(len(selected_frame_idx) != num_frames):
+        #    # Randomly select with distribution
+        #    selected_frame_idx += random.choices(range(len(frame_weightage)),
+        #                                         weights=frame_weightage.tolist(),
+        #                                         k=num_frames-len(selected_frame_idx))
+        #    # Delete duplicates
+        #    selected_frame_idx = list(set(selected_frame_idx))
+        #
+        #    if(len(selected_frame_idx) > num_frames):
+        #        exit(1)
+
 
         # Get selected frames
         selected_frames = self._get_frames(video_path, selected_frame_idx)
