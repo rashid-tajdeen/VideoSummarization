@@ -33,7 +33,7 @@ class FrameExtraction:
         self.data_directory = dataset_root + "track1_raw_data/"
         self.video_directory = dataset_root + "track1_raw_video/"
 
-        needs_prep = ["k_means"]
+        needs_prep = []
         if methods is None:
             # prepare all methods
             for method in needs_prep:
@@ -529,18 +529,22 @@ class FrameExtraction:
             # Initialise for the firse time
             if len(frame_weightage) == 0:
                 frame_weightage = np.zeros(len(json_data["frame_weightage"]))
+# Approach 1 #############################################################################################
+        #    # Compute frame weightage
+        #    frame_weightage += np.array(json_data["frame_weightage"]) * multiplier
+
+        ## Get frame indices in descending order of frame_weightage
+        #frames_by_priority = np.argsort(frame_weightage)[::-1]
+        ## Select 5 times the required number of frames for randomness
+        #eligible_frame_idx = frames_by_priority[:(num_frames*5)] if len(frames_by_priority)>(num_frames*5) else frames_by_priority
+        ## Select the required number of frames randomly
+        #selected_frame_idx = random.sample(eligible_frame_idx.tolist(), num_frames)
+##########################################################################################################
+
+# Approach 2 #############################################################################################
 
             # Compute frame weightage
             #frame_weightage += np.square(np.array(json_data["frame_weightage"])) * multiplier
-
-            frame_weightage += np.array(json_data["frame_weightage"]) * multiplier
-
-        # Get frame indices in descending order of frame_weightage
-        frames_by_priority = np.argsort(frame_weightage)[::-1]
-        # Select 5 times the required number of frames for randomness
-        eligible_frame_idx = frames_by_priority[:(num_frames*5)] if len(frames_by_priority)>(num_frames*5) else frames_by_priority
-        # Select the required number of frames randomly
-        selected_frame_idx = random.sample(eligible_frame_idx.tolist(), num_frames)
 
         #selected_frame_idx = []
         #while(len(selected_frame_idx) != num_frames):
@@ -553,6 +557,46 @@ class FrameExtraction:
         #
         #    if(len(selected_frame_idx) > num_frames):
         #        exit(1)
+##########################################################################################################
+
+# Approach 3 #############################################################################################
+#            # Compute frame weightage
+#            frame_weightage += np.array(json_data["frame_weightage"]) * multiplier
+#
+#        if (len(frame_weightage) % num_frames !=0):
+#            frame_weightage = np.concatenate((frame_weightage, np.zeros(num_frames - (len(frame_weightage) % num_frames))))
+#            if (len(frame_weightage) % num_frames !=0):
+#                exit(1)
+#        weight_batches = np.array_split(frame_weightage, num_frames)
+#
+#        selected_frame_idx = []
+#        for idx, b in enumerate(weight_batches):
+#            batch_len = len(b)
+#            b = b[b!=0]
+#            batch_priority = np.argsort(b)[::-1] + (idx * batch_len)
+#
+#            eligible_from_batch = batch_priority[:(num_frames)] if len(batch_priority)>(num_frames) else batch_priority
+#            selected_from_batch = np.random.choice(eligible_from_batch)
+#            selected_frame_idx.append(selected_from_batch)
+##########################################################################################################
+
+# Approach 4 #############################################################################################
+            # Compute frame weightage
+            frame_weightage += np.array(json_data["frame_weightage"]) * multiplier
+
+        if (len(frame_weightage) % num_frames !=0):
+            frame_weightage = np.concatenate((frame_weightage, np.zeros(num_frames - (len(frame_weightage) % num_frames))))
+            if (len(frame_weightage) % num_frames !=0):
+                exit(1)
+        weight_batches = np.array_split(frame_weightage, num_frames)
+
+        selected_frame_idx = []
+        for idx, b in enumerate(weight_batches):
+            selected_from_batch = random.choices(range(len(b)),
+                                                 weights=b.tolist(),
+                                                 k=1) + (idx * len(b))
+            selected_frame_idx.append(selected_from_batch)
+##########################################################################################################
 
 
         # Get selected frames

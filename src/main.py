@@ -1,5 +1,7 @@
 import os
 import torch
+import numpy as np
+import pandas as pd
 from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
 from qvpipe_dataset import QVPipeDataset
@@ -15,6 +17,8 @@ from datetime import datetime
 from torch.nn.functional import binary_cross_entropy_with_logits
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, multilabel_confusion_matrix
+
 
 def main():
     # Cuda specific code
@@ -26,6 +30,10 @@ def main():
     args = parse_arguments()
 
     run_id = str(args.num_frames) + 'frame_' + '_'.join(args.frame_selection) + '_' + datetime.today().strftime('%Y_%m_%d_%H:%M')
+    if args.model_name == None:
+        model_path = '../models/' + run_id + '.pth'
+    else:
+        model_path = '../models/' + args.model_name
 
     params = {"frame_selection": args.frame_selection,
               "dataset_root": args.dataset_path,
@@ -37,12 +45,12 @@ def main():
               "resize_x": 240,
               "resize_y": 240,
               "channels": 3,
-              "model_path": '../models/' + run_id + '.pth',
+              "model_path": model_path,
               "train": args.train,
               "valid": args.valid,
               "early_stopping": args.early_stopping
               }
-    
+
     log_params = params.copy()
     log_params["frame_selection"] = '_'.join(log_params["frame_selection"])
 
@@ -113,6 +121,9 @@ def parse_arguments():
                         help='Flag to enable validation')
     parser.add_argument('--early_stopping', action='store_true',
                         help='Flag to enable early stopping')
+    parser.add_argument('--model_name', type=str,
+                        default=None,
+                        help='Model name inside "model/"')
 
     return parser.parse_args()
 
@@ -347,10 +358,10 @@ def valid_step(params, valid_loader, model, device, logger):
 
     # Validation loop
     total_loss = []
-    confusion_matrix = {"true_positives": 0,
-                        "false_positives": 0,
-                        "false_negatives": 0,
-                        "true_negatives": 0}
+    #confusion_matrix = {"true_positives": 0,
+    #                    "false_positives": 0,
+    #                    "false_negatives": 0,
+    #                    "true_negatives": 0}
     with torch.no_grad():
         # Add progress bar
         bar = progressbar.ProgressBar(maxval=len(valid_loader.dataset),
@@ -362,6 +373,8 @@ def valid_step(params, valid_loader, model, device, logger):
         cls_meter = torchnet.meter.APMeter()  # keep track of class-wise average precision
 
         batch_done = 0
+
+        confusion_matrix_17 = np.zeros((17, 17), dtype=int)
 
         for inputs, labels in valid_loader:
             # inputs = inputs.to(device)
@@ -376,8 +389,11 @@ def valid_step(params, valid_loader, model, device, logger):
             logger["batch_loss"].append(loss.item())
             total_loss.append(loss.item())
 
+            #predicted = output_to_binary(outputs)
             predicted = (outputs >= 0.5).float()
-            confusion_matrix = update_confusion_matrix(confusion_matrix, predicted, labels)
+            
+            #confusion_matrix = update_confusion_matrix(confusion_matrix, predicted, labels)
+            confusion_matrix_17 = update_confusion_matrix_17(confusion_matrix_17, predicted, labels)
 
             # Update progress
             curr_batch_len = len(inputs)
@@ -389,21 +405,21 @@ def valid_step(params, valid_loader, model, device, logger):
 
     average_loss = sum(total_loss) / len(total_loss)
 
-    correct_predictions = confusion_matrix["true_positives"] + confusion_matrix["true_negatives"]
-    total_samples = (confusion_matrix["true_positives"] + confusion_matrix["false_positives"] +
-                     confusion_matrix["false_negatives"] + confusion_matrix["true_negatives"])
-    accuracy = (correct_predictions / total_samples) * 100
+    #correct_predictions = confusion_matrix["true_positives"] + confusion_matrix["true_negatives"]
+    #total_samples = (confusion_matrix["true_positives"] + confusion_matrix["false_positives"] +
+    #                 confusion_matrix["false_negatives"] + confusion_matrix["true_negatives"])
+    #accuracy = (correct_predictions / total_samples) * 100
 
     mean_average_precision = meter.value()
     average_precision = cls_meter.value()
 
     print("Validation Complete!\n--------------------")
     print(f"Validation Loss: {average_loss:.4f}")
-    print(f"Validation Accuracy: {accuracy:.2f}%")
-    print("Confusion Matrix:", confusion_matrix)
+    #print(f"Validation Accuracy: {accuracy:.2f}%")
+    #print("Confusion Matrix:", confusion_matrix)
     logger["average_loss"] = average_loss
-    logger["accuracy"] = accuracy
-    logger["confusion_matrix"] = confusion_matrix
+    #logger["accuracy"] = accuracy
+    #logger["confusion_matrix"] = confusion_matrix
 
     print("\nmAP Metrics\n--------------------")
     print("val_mAP", mean_average_precision)
@@ -411,11 +427,81 @@ def valid_step(params, valid_loader, model, device, logger):
     for idx, cls_ap in enumerate(average_precision):
         print("val_AP_%02d" % idx, cls_ap)
         logger["val_AP"].append(cls_ap.item())
+    
+    confusion_matrix_2 = conv_conf_17_t0_2(confusion_matrix_17)
+
+    # Convert the array to a pandas DataFrame
+    df_17 = pd.DataFrame(confusion_matrix_17)
+    df_17.to_csv('conf_mat_17.csv', index=True)
+    logger['conf_mat_17'].upload('conf_mat_17.csv')
+    df_2 = pd.DataFrame(confusion_matrix_2)
+    df_2.to_csv('conf_mat_2.csv', index=True)
+    logger['conf_mat_2'].upload('conf_mat_2.csv')
+
 
 
 def loss_function(out, label):
     # return torchvision.ops.sigmoid_focal_loss(out, label, reduction='mean')
     return binary_cross_entropy_with_logits(out, label.float())
+
+def output_to_binary(out):
+    # Find the maximum value in each row
+    max_values, max_indices = out.max(dim=1)
+
+    # Initialize the binary tensor with zeros
+    binary_tensor = torch.zeros_like(out, dtype=torch.int32)
+
+    # Condition 1: Max value is in the first column
+    condition1 = max_indices == 0
+
+    # Set the first column to 1 where the condition is met
+    binary_tensor[condition1, 0] = 1
+
+    # Condition 2: Max value is not in the first column
+    condition2 = max_indices != 0
+
+    # For rows where the max value is not in the first column,
+    # set columns with values greater than the first column value to 1
+    greater_than_first_column = out > out[:, [0]]
+    binary_tensor[condition2] = greater_than_first_column[condition2].int()
+
+    print("Original Tensor:")
+    print(out)
+    print("\nBinary Tensor:")
+    print(binary_tensor)
+
+
+def update_confusion_matrix_17(conf_mat_17, predicted, true_labels):
+    
+    # Convert tensors to numpy arrays
+    y_true = true_labels.numpy()
+    y_pred = predicted.numpy()
+
+    print(y_pred)
+    print(y_true)
+
+    # Populate the confusion matrix
+    for actual, predicted in zip(y_true, y_pred):
+        for i in range(17):
+            conf_mat_17[i, np.where(predicted == 1)[0]] += (actual[i] == 1)
+
+    print(conf_mat_17)
+
+    ## Compute the presence of any defect (excluding the first column which is 'no defect')
+    #actual_defect_presence = np.any(y_true[:, 1:], axis=1).astype(int)
+    #predicted_defect_presence = np.any(y_pred[:, 1:], axis=1).astype(int)
+    ## Compute the 2x2 confusion matrix for no defect vs defect
+    #confusion_matrix_2x2 = multilabel_confusion_matrix(actual_defect_presence.reshape(-1, 1), 
+    #                                                   predicted_defect_presence.reshape(-1, 1))
+
+    ## Extract and print the 2x2 confusion matrix
+    #conf_mat_2 += confusion_matrix_2x2[0]
+
+    #print(conf_mat_2)
+    
+    #conv_conf_17_t0_2(conf_mat_17)
+
+    return conf_mat_17
 
 
 def update_confusion_matrix(confusion_matrix, predicted, true_labels):
@@ -424,6 +510,10 @@ def update_confusion_matrix(confusion_matrix, predicted, true_labels):
     confusion_matrix["false_negatives"] += torch.sum((true_labels == 1) & (predicted == 0))
     confusion_matrix["true_negatives"] += torch.sum((true_labels == 0) & (predicted == 0))
     return confusion_matrix
+
+def conv_conf_17_t0_2(conf_mat):
+    return np.array([[np.sum(conf_mat[0:1, 0:1]), np.sum(conf_mat[0:1, 1:])],
+                    [np.sum(conf_mat[1:, 0:1]), np.sum(conf_mat[1:, 1:])]])
 
 
 if __name__ == '__main__':
